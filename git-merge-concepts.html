@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git Merge Mastery — Visual Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #181c24;
+    --border: #252a35;
+    --accent: #f97316;
+    --accent2: #3b82f6;
+    --accent3: #10b981;
+    --accent4: #a855f7;
+    --accent5: #ec4899;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --commit-main: #f97316;
+    --commit-feat: #3b82f6;
+    --commit-merge: #10b981;
+    --commit-squash: #a855f7;
+    --commit-rebase: #ec4899;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* ── NOISE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 60px 40px 40px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    top: -100px; left: 50%; transform: translateX(-50%);
+    width: 600px; height: 400px;
+    background: radial-gradient(ellipse, rgba(249,115,22,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .git-badge {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    border: 1px solid rgba(249,115,22,0.3);
+    padding: 4px 12px;
+    border-radius: 2px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -2px;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 1.1rem;
+    font-weight: 400;
+    max-width: 600px;
+    margin: 0 auto 40px;
+  }
+
+  /* ── BIG PICTURE BOX ── */
+  .big-picture {
+    margin: 0 auto 60px;
+    max-width: 900px;
+    padding: 0 40px;
+  }
+
+  .big-picture-box {
+    background: linear-gradient(135deg, rgba(249,115,22,0.08), rgba(59,130,246,0.08));
+    border: 1px solid rgba(249,115,22,0.25);
+    border-radius: 12px;
+    padding: 28px 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .big-picture-box::before {
+    content: '🧠';
+    position: absolute;
+    right: 24px; top: 24px;
+    font-size: 2rem;
+    opacity: 0.6;
+  }
+
+  .big-picture-box h3 {
+    font-size: 0.75rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 12px;
+  }
+
+  .big-picture-box p {
+    color: #cbd5e1;
+    line-height: 1.7;
+    font-size: 1rem;
+  }
+
+  .two-mechanics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+  }
+
+  .mechanic {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+  }
+
+  .mechanic .num {
+    color: var(--accent);
+    font-size: 1.4rem;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  /* ── NAV TABS ── */
+  .nav-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 0 40px;
+    margin-bottom: 48px;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .tab-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .tab-btn:hover { border-color: var(--accent); color: var(--text); }
+  .tab-btn.active { background: rgba(249,115,22,0.12); border-color: var(--accent); color: var(--accent); }
+
+  /* ── SECTIONS ── */
+  .section {
+    display: none;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 40px 80px;
+  }
+
+  .section.active { display: block; animation: fadeUp 0.4s ease; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .section-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin-bottom: 8px;
+    letter-spacing: -1px;
+  }
+
+  .section-desc {
+    color: var(--muted);
+    margin-bottom: 40px;
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+
+  /* ── CONCEPT CARDS ── */
+  .concepts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    gap: 24px;
+  }
+
+  .concept-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .concept-card:hover {
+    border-color: rgba(249,115,22,0.4);
+    transform: translateY(-2px);
+  }
+
+  .card-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .card-icon {
+    font-size: 1.6rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .card-meta { flex: 1; }
+
+  .card-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+    letter-spacing: -0.3px;
+  }
+
+  .card-cmd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+    background: rgba(249,115,22,0.1);
+    padding: 2px 8px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+
+  .card-body { padding: 20px 24px; }
+
+  .analogy {
+    background: var(--surface2);
+    border-left: 3px solid var(--accent3);
+    padding: 12px 14px;
+    border-radius: 0 6px 6px 0;
+    margin-bottom: 16px;
+    font-size: 0.88rem;
+    color: #94a3b8;
+    line-height: 1.6;
+  }
+
+  .analogy strong { color: var(--accent3); }
+
+  .card-desc {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    line-height: 1.65;
+    margin-bottom: 16px;
+  }
+
+  /* ── GIT GRAPHS ── */
+  .git-graph {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    overflow-x: auto;
+  }
+
+  .git-graph svg {
+    display: block;
+    overflow: visible;
+  }
+
+  /* ── COMMAND BLOCK ── */
+  .cmd-block {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-top: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.8;
+    position: relative;
+  }
+
+  .cmd-line { display: flex; gap: 8px; }
+  .cmd-prompt { color: var(--accent3); flex-shrink: 0; }
+  .cmd-text { color: #e2e8f0; }
+  .cmd-comment { color: var(--muted); }
+
+  /* ── WHEN TO USE ── */
+  .when-use {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+
+  .tag {
+    font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 3px 8px;
+    border-radius: 3px;
+    border: 1px solid;
+  }
+
+  .tag.green { color: #10b981; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.08); }
+  .tag.blue  { color: #3b82f6; border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.08); }
+  .tag.orange{ color: #f97316; border-color: rgba(249,115,22,0.3); background: rgba(249,115,22,0.08); }
+  .tag.purple{ color: #a855f7; border-color: rgba(168,85,247,0.3); background: rgba(168,85,247,0.08); }
+  .tag.red   { color: #ef4444; border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.08); }
+  .tag.pink  { color: #ec4899; border-color: rgba(236,72,153,0.3); background: rgba(236,72,153,0.08); }
+
+  /* ── CONFLICT DEMO ── */
+  .conflict-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+  }
+
+  .file-box {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    line-height: 1.8;
+  }
+
+  .file-box .add { color: #10b981; }
+  .file-box .del { color: #ef4444; }
+  .file-box .hdr { color: #3b82f6; }
+  .file-box .ctx { color: var(--muted); }
+
+  .arrow-mid { color: var(--accent); font-size: 1.2rem; text-align: center; }
+
+  /* ── CHEATSHEET ── */
+  .cheatsheet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  .cheat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  .cheat-card h4 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  .cheat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+
+  .cheat-row:last-child { border-bottom: none; }
+
+  .cheat-cmd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .cheat-desc {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  /* ── COMPARISON TABLE ── */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .compare-table th {
+    background: var(--surface2);
+    padding: 12px 16px;
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .compare-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .compare-table tr:last-child td { border-bottom: none; }
+  .compare-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .check { color: #10b981; }
+  .cross { color: #ef4444; }
+  .dash  { color: var(--muted); }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── STRATEGY MODIFIER GRID ── */
+  .modifier-list { display: grid; gap: 10px; }
+  .mod-item {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 16px;
+    align-items: start;
+    padding: 12px 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .mod-flag { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--accent4); }
+  .mod-desc { font-size: 0.85rem; color: #94a3b8; line-height: 1.5; }
+
+  /* ── DECISION TREE ── */
+  .decision-tree { text-align: center; padding: 20px 0; overflow-x: auto; }
+  .dt-node {
+    display: inline-block;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    margin: 4px;
+  }
+  .dt-question { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.4); color: #93c5fd; }
+  .dt-answer   { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7; }
+  .dt-row { display: flex; justify-content: center; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin: 8px 0; }
+  .dt-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .dt-arrow { color: var(--muted); font-size: 1.2rem; }
+
+  @media (max-width: 700px) {
+    header { padding: 40px 20px 30px; }
+    .section { padding: 0 20px 60px; }
+    .nav-tabs { padding: 0 20px; }
+    .concepts-grid { grid-template-columns: 1fr; }
+    .big-picture { padding: 0 20px; }
+    .two-mechanics { grid-template-columns: 1fr; }
+    .mod-item { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="git-badge">Visual Guide</div>
+  <h1>Git Merge Mastery</h1>
+  <p class="subtitle">Every merge type, strategy, and trick — explained visually with real-world analogies so you actually remember them.</p>
+</header>
+
+<div class="big-picture">
+  <div class="big-picture-box">
+    <h3>The Big Picture</h3>
+    <p>Despite all the terminology, Git fundamentally has <strong style="color:#fff">only two primitives</strong>. Everything else is just control over which one happens and how.</p>
+    <div class="two-mechanics">
+      <div class="mechanic">
+        <span class="num">①</span>
+        <strong style="color:#fff">Move a pointer</strong><br>
+        <span style="color:var(--muted)">Fast-forward — no new commit needed, the branch label just slides forward.</span>
+      </div>
+      <div class="mechanic">
+        <span class="num">②</span>
+        <strong style="color:#fff">Create a merge commit</strong><br>
+        <span style="color:var(--muted)">New commit with two (or more) parents — preserves full history.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<nav class="nav-tabs">
+  <button class="tab-btn active" onclick="showSection('core')">① Core Merges</button>
+  <button class="tab-btn" onclick="showSection('strategies')">② Strategies</button>
+  <button class="tab-btn" onclick="showSection('modifiers')">③ Modifiers</button>
+  <button class="tab-btn" onclick="showSection('management')">④ Management</button>
+  <button class="tab-btn" onclick="showSection('alternatives')">⑤ Alternatives</button>
+  <button class="tab-btn" onclick="showSection('compare')">📊 Compare All</button>
+  <button class="tab-btn" onclick="showSection('cheatsheet')">⚡ Cheatsheet</button>
+</nav>
+
+<!-- ═══════════════════════════ SECTION 1: CORE MERGES ═══════════════════════════ -->
+<section class="section active" id="core">
+  <div class="section-title">Core Merge Types</div>
+  <p class="section-desc">These define <em>what kind of merge happens</em> — how your branch history looks after the operation.</p>
+
+  <div class="concepts-grid">
+
+    <!-- FAST FORWARD -->
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">⚡</div>
+        <div class="card-meta">
+          <div class="card-name">Fast-Forward Merge</div>
+          <span class="card-cmd">git merge feature</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> You're reading a book at chapter 5. Your friend reads ahead to chapter 10. To "merge" their progress — you just flip your bookmark to chapter 10. No new chapter is created.</div>
+        <p class="card-desc">Happens when the target branch has <strong style="color:#fff">no new commits</strong> since the feature branch diverged. Git simply moves the branch pointer forward — no merge commit is created, history stays linear.</p>
+        <div class="git-graph">
+          <svg width="420" height="100" viewBox="0 0 420 100">
+            <!-- Before -->
+            <text x="10" y="20" fill="#64748b" font-family="JetBrains Mono" font-size="11">BEFORE</text>
+            <circle cx="40" cy="50" r="14" fill="#f97316" stroke="none"/>
+            <text x="40" y="55" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">A</text>
+            <circle cx="100" cy="50" r="14" fill="#f97316" stroke="none"/>
+            <text x="100" y="55" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">B</text>
+            <circle cx="160" cy="50" r="14" fill="#3b82f6" stroke="none"/>
+            <text x="160" y="55" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">C</text>
+            <line x1="54" y1="50" x2="86" y2="50" stroke="#374151" stroke-width="2" marker-end="url(#arrow-gray)"/>
+            <line x1="114" y1="50" x2="146" y2="50" stroke="#374151" stroke-width="2" marker-end="url(#arrow-gray)"/>
+            <text x="100" y="80" fill="#f97316" font-size="10" font-family="JetBrains Mono" text-anchor="middle">main</text>
+            <text x="160" y="80" fill="#3b82f6" font-size="10" font-family="JetBrains Mono" text-anchor="middle">feature</text>
+            <!-- Arrow -->
+            <text x="200" y="55" fill="#10b981" font-size="20" text-anchor="middle">→</text>
+            <!-- After -->
+            <text x="230" y="20" fill="#64748b" font-family="JetBrains Mono" font-size="11">AFTER</text>
+            <circle cx="260" cy="50" r="14" fill="#f97316" stroke="none"/>
+            <text x="260" y="55" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">A</text>
+            <circle cx="320" cy="50" r="14" fill="#f97316" stroke="none"/>
+            <text x="320" y="55" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">B</text>
+            <circle cx="380" cy="50" r="14" fill="#10b981" stroke="#10b981" stroke-width="2" fill-opacity="0.2"/>
+            <text x="380" y="55" fill="#10b981" font-size="10" font-family="JetBrains Mono" text-anchor="middle">C</text>
+            <line x1="274" y1="50" x2="306" y2="50" stroke="#374151" stroke-width="2"/>
+            <line x1="334" y1="50" x2="366" y2="50" stroke="#374151" stroke-width="2"/>
+            <text x="380" y="75" fill="#f97316" font-size="10" font-family="JetBrains Mono" text-anchor="middle">main</text>
+            <text x="380" y="88" fill="#3b82f6" font-size="10" font-family="JetBrains Mono" text-anchor="middle">feature</text>
+            <defs>
+              <marker id="arrow-gray" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#374151"/>
+              </marker>
+            </defs>
+          </svg>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git checkout main</span></div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge feature</span> <span class="cmd-comment"># fast-forward by default</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">✓ Clean linear history</span>
+          <span class="tag blue">✓ No divergence</span>
+          <span class="tag orange">⚠ Loses branch context</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- THREE WAY MERGE -->
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🔀</div>
+        <div class="card-meta">
+          <div class="card-name">Three-Way (True) Merge</div>
+          <span class="card-cmd">git merge feature</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> You and a colleague both edit different chapters of the same document independently. A merge commit is like a new title page that says "this combines both your work" — and it has two authors.</div>
+        <p class="card-desc">Happens when <strong style="color:#fff">both branches have diverged</strong>. Git finds the common ancestor (the "base"), compares changes from both branches, and creates a <strong style="color:#fff">new merge commit with two parents</strong>.</p>
+        <div class="git-graph">
+          <svg width="380" height="120" viewBox="0 0 380 120">
+            <circle cx="30" cy="60" r="13" fill="#f97316"/>
+            <text x="30" y="64" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">A</text>
+            <!-- main branch -->
+            <circle cx="100" cy="35" r="13" fill="#f97316"/>
+            <text x="100" y="39" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">B</text>
+            <circle cx="170" cy="35" r="13" fill="#f97316"/>
+            <text x="170" y="39" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">C</text>
+            <!-- feature branch -->
+            <circle cx="100" cy="90" r="13" fill="#3b82f6"/>
+            <text x="100" y="94" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">D</text>
+            <circle cx="170" cy="90" r="13" fill="#3b82f6"/>
+            <text x="170" y="94" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">E</text>
+            <!-- merge commit -->
+            <circle cx="270" cy="60" r="15" fill="#10b981"/>
+            <text x="270" y="64" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">M</text>
+            <!-- lines -->
+            <line x1="43" y1="53" x2="87" y2="40" stroke="#374151" stroke-width="1.5"/>
+            <line x1="43" y1="67" x2="87" y2="83" stroke="#374151" stroke-width="1.5"/>
+            <line x1="113" y1="35" x2="157" y2="35" stroke="#374151" stroke-width="1.5"/>
+            <line x1="113" y1="90" x2="157" y2="90" stroke="#374151" stroke-width="1.5"/>
+            <line x1="183" y1="40" x2="255" y2="55" stroke="#f97316" stroke-width="1.5"/>
+            <line x1="183" y1="85" x2="255" y2="65" stroke="#3b82f6" stroke-width="1.5"/>
+            <text x="170" y="18" fill="#f97316" font-size="10" font-family="JetBrains Mono" text-anchor="middle">main</text>
+            <text x="170" y="110" fill="#3b82f6" font-size="10" font-family="JetBrains Mono" text-anchor="middle">feature</text>
+            <text x="270" y="85" fill="#10b981" font-size="10" font-family="JetBrains Mono" text-anchor="middle">merge commit</text>
+            <text x="30" y="78" fill="#64748b" font-size="9" font-family="JetBrains Mono" text-anchor="middle">base</text>
+          </svg>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git checkout main && git merge feature</span></div>
+          <div class="cmd-comment"># Git finds common ancestor A, diffs both sides, creates M</div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">✓ Preserves full history</span>
+          <span class="tag blue">✓ Shows branch context</span>
+          <span class="tag orange">⚠ Non-linear graph</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- NO FF -->
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🏷️</div>
+        <div class="card-meta">
+          <div class="card-name">No Fast-Forward Merge</div>
+          <span class="card-cmd">git merge --no-ff feature</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> Even if your colleague only read ahead, you <em>still</em> create a meeting note that says "we discussed this at 3pm on Tuesday." It's a deliberate record that a decision point happened.</div>
+        <p class="card-desc">Forces a merge commit even when a fast-forward <em>would</em> be possible. Preserves the information that a branch existed. Great for feature branches where you want the history to show "this was a cohesive feature."</p>
+        <div class="git-graph">
+          <svg width="360" height="110" viewBox="0 0 360 110">
+            <circle cx="30" cy="60" r="13" fill="#f97316"/>
+            <text x="30" y="64" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">A</text>
+            <circle cx="100" cy="80" r="13" fill="#3b82f6"/>
+            <text x="100" y="84" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">B</text>
+            <circle cx="170" cy="80" r="13" fill="#3b82f6"/>
+            <text x="170" y="84" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">C</text>
+            <circle cx="260" cy="60" r="15" fill="#10b981"/>
+            <text x="260" y="64" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">M</text>
+            <line x1="43" y1="63" x2="87" y2="75" stroke="#374151" stroke-width="1.5"/>
+            <line x1="113" y1="80" x2="157" y2="80" stroke="#374151" stroke-width="1.5"/>
+            <line x1="43" y1="60" x2="245" y2="60" stroke="#374151" stroke-width="1.5" stroke-dasharray="4,3"/>
+            <line x1="183" y1="75" x2="247" y2="64" stroke="#3b82f6" stroke-width="1.5"/>
+            <text x="170" y="100" fill="#3b82f6" font-size="10" font-family="JetBrains Mono" text-anchor="middle">feature</text>
+            <text x="30" y="45" fill="#f97316" font-size="10" font-family="JetBrains Mono" text-anchor="middle">main</text>
+            <text x="260" y="85" fill="#10b981" font-size="10" font-family="JetBrains Mono" text-anchor="middle">main after</text>
+            <text x="155" y="52" fill="#64748b" font-size="9" font-family="JetBrains Mono" text-anchor="middle">explicit merge commit</text>
+          </svg>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge --no-ff feature</span> <span class="cmd-comment"># always creates M</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">✓ Feature grouping visible</span>
+          <span class="tag blue">✓ Easy to revert whole feature</span>
+          <span class="tag purple">→ Team standard practice</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SQUASH MERGE -->
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🗜️</div>
+        <div class="card-meta">
+          <div class="card-name">Squash Merge</div>
+          <span class="card-cmd">git merge --squash feature</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> You spend a week drafting a 20-page report with many messy drafts. Before handing it in, you compress it into 1 clean final page. Only the polished result ends up in the archive — not every draft.</div>
+        <p class="card-desc">Collapses all commits from the feature branch into <strong style="color:#fff">one staged change</strong> on the current branch. You then commit it manually. Keeps history clean, but <strong style="color:#fff">loses individual commit history</strong> and branch relationship.</p>
+        <div class="git-graph">
+          <svg width="380" height="110" viewBox="0 0 380 110">
+            <!-- feature commits being squashed -->
+            <circle cx="30" cy="35" r="11" fill="#3b82f6" opacity="0.5"/>
+            <text x="30" y="38" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">x</text>
+            <circle cx="80" cy="35" r="11" fill="#3b82f6" opacity="0.5"/>
+            <text x="80" y="38" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">y</text>
+            <circle cx="130" cy="35" r="11" fill="#3b82f6" opacity="0.5"/>
+            <text x="130" y="38" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">z</text>
+            <line x1="41" y1="35" x2="69" y2="35" stroke="#1e3a5f" stroke-width="1.5"/>
+            <line x1="91" y1="35" x2="119" y2="35" stroke="#1e3a5f" stroke-width="1.5"/>
+            <text x="80" y="18" fill="#3b82f6" font-size="10" font-family="JetBrains Mono" text-anchor="middle">feature (squashed away)</text>
+            <!-- arrow down -->
+            <text x="200" y="42" fill="#a855f7" font-size="22" text-anchor="middle">↓</text>
+            <text x="200" y="58" fill="#a855f7" font-size="10" font-family="JetBrains Mono" text-anchor="middle">squash!</text>
+            <!-- main line -->
+            <circle cx="60" cy="85" r="13" fill="#f97316"/>
+            <text x="60" y="89" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">A</text>
+            <circle cx="130" cy="85" r="13" fill="#f97316"/>
+            <text x="130" y="89" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">B</text>
+            <circle cx="220" cy="85" r="15" fill="#a855f7"/>
+            <text x="220" y="89" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">xyz</text>
+            <line x1="73" y1="85" x2="117" y2="85" stroke="#374151" stroke-width="1.5"/>
+            <line x1="143" y1="85" x2="205" y2="85" stroke="#374151" stroke-width="1.5"/>
+            <text x="60" y="106" fill="#f97316" font-size="10" font-family="JetBrains Mono" text-anchor="middle">main</text>
+            <text x="220" y="106" fill="#a855f7" font-size="10" font-family="JetBrains Mono" text-anchor="middle">squash commit</text>
+          </svg>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge --squash feature</span></div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git commit -m "feat: add user auth"</span> <span class="cmd-comment"># you must commit!</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">✓ Clean main branch log</span>
+          <span class="tag red">✗ Loses individual commits</span>
+          <span class="tag purple">→ PR merge on GitHub</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- OCTOPUS -->
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🐙</div>
+        <div class="card-meta">
+          <div class="card-name">Octopus Merge</div>
+          <span class="card-cmd">git merge feat-a feat-b feat-c</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> A conductor cues all orchestra sections — strings, brass, woodwinds — simultaneously into one unified performance. One cue, many sources.</div>
+        <p class="card-desc">Merges <strong style="color:#fff">more than two branches</strong> in a single merge commit. The resulting commit has multiple parents. Used primarily in large monorepos or integration branches. Requires all merges to be conflict-free.</p>
+        <div class="git-graph">
+          <svg width="360" height="120" viewBox="0 0 360 120">
+            <circle cx="50" cy="20" r="11" fill="#3b82f6"/>
+            <text x="50" y="24" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">A</text>
+            <circle cx="50" cy="60" r="11" fill="#ec4899"/>
+            <text x="50" y="64" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">B</text>
+            <circle cx="50" cy="100" r="11" fill="#f59e0b"/>
+            <text x="50" y="104" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">C</text>
+            <circle cx="220" cy="60" r="20" fill="#10b981"/>
+            <text x="220" y="64" fill="white" font-size="10" font-family="JetBrains Mono" text-anchor="middle">M</text>
+            <line x1="61" y1="25" x2="200" y2="52" stroke="#3b82f6" stroke-width="1.5"/>
+            <line x1="61" y1="60" x2="200" y2="60" stroke="#ec4899" stroke-width="1.5"/>
+            <line x1="61" y1="95" x2="200" y2="68" stroke="#f59e0b" stroke-width="1.5"/>
+            <text x="50" y="10" fill="#3b82f6" font-size="9" font-family="JetBrains Mono" text-anchor="middle">feat-a</text>
+            <text x="50" y="77" fill="#ec4899" font-size="9" font-family="JetBrains Mono" text-anchor="middle">feat-b</text>
+            <text x="50" y="117" fill="#f59e0b" font-size="9" font-family="JetBrains Mono" text-anchor="middle">feat-c</text>
+            <text x="300" y="55" fill="#10b981" font-size="9" font-family="JetBrains Mono">octopus</text>
+            <text x="300" y="67" fill="#10b981" font-size="9" font-family="JetBrains Mono">merge</text>
+          </svg>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge feat-a feat-b feat-c</span></div>
+          <div class="cmd-comment"># Creates 1 commit with 4 parents (base + 3 branches)</div>
+        </div>
+        <div class="when-use">
+          <span class="tag blue">✓ Multiple independent features</span>
+          <span class="tag red">✗ Fails on conflicts</span>
+          <span class="tag orange">→ Rare, integration branches</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFLICT MERGE -->
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">💥</div>
+        <div class="card-meta">
+          <div class="card-name">Merge with Conflict</div>
+          <span class="card-cmd">git merge feature → CONFLICT</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> You and a colleague both edit the same sentence in the same paragraph. Git can't auto-pick one — it puts both versions in the file and asks <em>you</em> to choose.</div>
+        <p class="card-desc">When both branches modify the <strong style="color:#fff">same lines differently</strong>, Git can't auto-resolve. It marks conflict sections in the file and pauses. You edit manually, <code>git add</code>, then <code>git merge --continue</code>.</p>
+        <div class="conflict-grid" style="margin: 14px 0;">
+          <div class="file-box">
+            <div class="hdr">&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD (main)</div>
+            <div class="add">color: blue;</div>
+            <div class="hdr">=======</div>
+            <div class="del">color: red;</div>
+            <div class="hdr">&gt;&gt;&gt;&gt;&gt;&gt;&gt; feature</div>
+            <div class="ctx">font-size: 16px;</div>
+          </div>
+          <div class="arrow-mid">✏️<br>fix<br>it</div>
+          <div class="file-box">
+            <div class="ctx">/* resolved: */</div>
+            <div class="add">color: purple;</div>
+            <div class="ctx">font-size: 16px;</div>
+          </div>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge feature</span> <span class="cmd-comment"># CONFLICT!</span></div>
+          <div class="cmd-line"><span class="cmd-comment"># → Edit the file, remove conflict markers</span></div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git add styles.css</span></div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge --continue</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag red">⚠ Manual resolution needed</span>
+          <span class="tag blue">→ Use git mergetool for GUI</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AUTO-MERGE -->
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">✅</div>
+        <div class="card-meta">
+          <div class="card-name">Auto-Merge (No Conflicts)</div>
+          <span class="card-cmd">git merge feature → Auto-merging...</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> You edit chapter 3, your colleague edits chapter 7. When combined, there's zero overlap — Git merges them automatically without asking anyone.</div>
+        <p class="card-desc">When changes from both branches <strong style="color:#fff">touch different parts</strong> of the codebase, Git can automatically combine them. It creates the merge commit without human input. This is the happy path.</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge feature</span></div>
+          <div class="cmd-line"><span class="cmd-comment">Auto-merging app.js</span></div>
+          <div class="cmd-line"><span class="cmd-comment">Auto-merging styles.css</span></div>
+          <div class="cmd-line"><span class="cmd-comment">Merge made by the 'ort' strategy.</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">✓ No action required</span>
+          <span class="tag blue">✓ Changes in different files/lines</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end grid -->
+</section>
+
+<!-- ═══════════════════════════ SECTION 2: STRATEGIES ═══════════════════════════ -->
+<section class="section" id="strategies">
+  <div class="section-title">Merge Strategies</div>
+  <p class="section-desc">These control <em>how Git internally performs</em> the merge algorithm. Most users never change these, but understanding them helps debug tricky situations.</p>
+
+  <div class="concepts-grid">
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🚀</div>
+        <div class="card-meta">
+          <div class="card-name">ORT Strategy</div>
+          <span class="card-cmd">git merge -s ort feature</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> The newest, fastest postal sorting algorithm. It handles all the edge cases better than its predecessor and is faster to boot. You don't see it working — you just get better results.</div>
+        <p class="card-desc"><strong style="color:#fff">O</strong>stensibly <strong style="color:#fff">R</strong>ecursive's <strong style="color:#fff">T</strong>win — the <strong style="color:#fff">default since Git 2.33</strong>. Rewrites the old Recursive strategy with better handling of criss-cross merges and rename conflicts. Faster, safer, same results.</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge -s ort feature</span> <span class="cmd-comment"># explicit (default anyway)</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">✓ Modern Git default</span>
+          <span class="tag blue">✓ Best for typical merges</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🔄</div>
+        <div class="card-meta">
+          <div class="card-name">Recursive Strategy</div>
+          <span class="card-cmd">git merge -s recursive feature</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> The original postal sorting system — reliable, proven, but slower on complex packages. Replaced by ORT but still works perfectly for most cases.</div>
+        <p class="card-desc">Was the default before Git 2.33. Handles criss-cross merge scenarios by recursively merging multiple common ancestors. Still available and still used in scripts/CI that pin behavior. The ORT strategy supersedes it.</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge -s recursive feature</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag orange">→ Legacy / older Git versions</span>
+          <span class="tag blue">→ Behavior compatibility</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">⚡</div>
+        <div class="card-meta">
+          <div class="card-name">Resolve Strategy</div>
+          <span class="card-cmd">git merge -s resolve feature</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> A quick, no-frills mediator that only handles simple disputes — two parties, one common reference point. If the conflict is complex, it gives up rather than guessing.</div>
+        <p class="card-desc">A simpler, older three-way merge strategy. Only works with exactly two heads. Faster than recursive for simple cases but can't handle complex merge histories. Rarely used today — mostly historical.</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge -s resolve feature</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag orange">→ Simple 2-head merges</span>
+          <span class="tag red">✗ Fails on complex histories</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🎭</div>
+        <div class="card-meta">
+          <div class="card-name">Ours Strategy</div>
+          <span class="card-cmd">git merge -s ours feature</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> You hold a formal vote but already decided the outcome. The other branch's code is completely ignored — but the merge commit exists for record-keeping purposes.</div>
+        <p class="card-desc"><strong style="color:#fff">Discards all changes from the other branch entirely</strong>, keeping only your working tree. Creates a merge commit so history records that the merge happened, but the result is identical to your branch's current state. Note: <code>-s ours</code> ≠ <code>-X ours</code>.</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge -s ours abandoned-feature</span></div>
+          <div class="cmd-comment"># "We're aware it existed, but we don't want its code"</div>
+        </div>
+        <div class="when-use">
+          <span class="tag purple">→ Retire old branches</span>
+          <span class="tag red">✗ Other branch code is lost</span>
+          <span class="tag blue">✓ Tracks merge in history</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🌳</div>
+        <div class="card-meta">
+          <div class="card-name">Subtree Strategy</div>
+          <span class="card-cmd">git merge -s subtree other-repo</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> You're merging a supplier's entire warehouse into one corner of your bigger warehouse. The supplier's layout maps to your <code>/vendor/lib</code> subdirectory.</div>
+        <p class="card-desc">Like recursive, but Git auto-detects or you specify that one tree should be treated as a subtree of the other. Used to embed one project inside another. An alternative to git submodules for vendored dependencies.</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge -s subtree --prefix=vendor/ lib-repo/main</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag blue">→ Vendoring dependencies</span>
+          <span class="tag green">✓ Self-contained repo</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SECTION 3: MODIFIERS ═══════════════════════════ -->
+<section class="section" id="modifiers">
+  <div class="section-title">Strategy Modifiers</div>
+  <p class="section-desc">Pass with <code style="color:var(--accent4)">-X flag</code> to tune <em>how conflicts are resolved</em> during a merge. These work with ORT and Recursive strategies.</p>
+
+  <div class="modifier-list" style="max-width: 800px; margin-bottom: 40px;">
+    <div class="mod-item">
+      <div class="mod-flag">-X ours</div>
+      <div class="mod-desc"><strong style="color:#fff">Auto-favor our side</strong> in every conflict. Instead of stopping and asking you, Git picks the current branch's version. Unlike <code>-s ours</code>, the other branch's non-conflicting changes still come in.</div>
+    </div>
+    <div class="mod-item">
+      <div class="mod-flag">-X theirs</div>
+      <div class="mod-desc"><strong style="color:#fff">Auto-favor their side</strong> in every conflict. The incoming branch wins all disputes. Useful when you know the feature branch is "more correct" or you're pulling in an authoritative update.</div>
+    </div>
+    <div class="mod-item">
+      <div class="mod-flag">-X patience</div>
+      <div class="mod-desc">Uses a smarter diff algorithm (<code>diff --patience</code>) that produces <strong style="color:#fff">more human-readable diffs</strong> and fewer spurious conflicts. Slower but better for complex code with many repeated lines (e.g., lots of braces).</div>
+    </div>
+    <div class="mod-item">
+      <div class="mod-flag">-X ignore-space-change</div>
+      <div class="mod-desc">Ignores changes in <strong style="color:#fff">whitespace count</strong> when detecting conflicts (tabs→spaces, extra spaces). Code changes still matter; only whitespace-only changes are ignored.</div>
+    </div>
+    <div class="mod-item">
+      <div class="mod-flag">-X ignore-all-space</div>
+      <div class="mod-desc">Ignores <strong style="color:#fff">all whitespace entirely</strong> when comparing lines. Stronger than <code>ignore-space-change</code>. Useful after bulk formatting runs.</div>
+    </div>
+    <div class="mod-item">
+      <div class="mod-flag">--allow-unrelated-histories</div>
+      <div class="mod-desc">Required when merging two repos that share <strong style="color:#fff">no common ancestor commit</strong>. Git normally refuses this. Example: merging a freshly initialized local repo with a remote that has its own history.</div>
+    </div>
+  </div>
+
+  <div class="cmd-block" style="max-width: 800px;">
+    <div class="cmd-comment"># Real-world examples:</div>
+    <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge -X ours feature</span> <span class="cmd-comment"># we always win conflicts</span></div>
+    <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge -X theirs feature</span> <span class="cmd-comment"># feature always wins conflicts</span></div>
+    <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge -X patience feature</span> <span class="cmd-comment"># smarter diff</span></div>
+    <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge -X ignore-space-change feature</span> <span class="cmd-comment"># ignore whitespace</span></div>
+    <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge --allow-unrelated-histories origin/main</span> <span class="cmd-comment"># different repos</span></div>
+  </div>
+
+  <div style="margin-top: 32px; max-width: 800px;">
+    <div style="background: rgba(168,85,247,0.08); border: 1px solid rgba(168,85,247,0.25); border-radius: 10px; padding: 20px 24px;">
+      <h4 style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; letter-spacing:2px; color:var(--accent4); margin-bottom:12px;">⚠️ CRITICAL DISTINCTION: -s ours vs -X ours</h4>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; font-size:0.85rem; color:#94a3b8;">
+        <div>
+          <div style="color:#fff; font-weight:600; margin-bottom:6px; font-family:'JetBrains Mono',monospace;">-s ours (strategy)</div>
+          Their entire branch is <strong style="color:#ef4444">completely discarded</strong>. Only your files remain. Used to "absorb" a dead branch without its changes.
+        </div>
+        <div>
+          <div style="color:#fff; font-weight:600; margin-bottom:6px; font-family:'JetBrains Mono',monospace;">-X ours (modifier)</div>
+          Their non-conflicting changes <strong style="color:#10b981">still come in</strong>. Only conflicts auto-resolve to our version. Much more useful day-to-day.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SECTION 4: MANAGEMENT ═══════════════════════════ -->
+<section class="section" id="management">
+  <div class="section-title">Merge Management Commands</div>
+  <p class="section-desc">These commands let you <em>control the merge process</em> when it's in progress — especially when you hit conflicts.</p>
+
+  <div class="concepts-grid">
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🛑</div>
+        <div class="card-meta">
+          <div class="card-name">git merge --abort</div>
+          <span class="card-cmd">Bail out completely</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> You started mixing two paint colors and realized they clash badly. You throw the mixture out and restore the original cans exactly as they were.</div>
+        <p class="card-desc">Cancels a merge-in-progress and <strong style="color:#fff">restores your working tree</strong> to the state before you ran git merge. All your edits to conflicted files are discarded. The branch pointer doesn't move.</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge feature</span> <span class="cmd-comment"># CONFLICT!</span></div>
+          <div class="cmd-line"><span class="cmd-comment"># Decided this isn't the right time</span></div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge --abort</span></div>
+          <div class="cmd-comment"># Back to pre-merge state, clean slate</div>
+        </div>
+        <div class="when-use">
+          <span class="tag red">→ Too many conflicts</span>
+          <span class="tag blue">→ Wrong branch merged</span>
+          <span class="tag orange">→ Need to rethink approach</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">▶️</div>
+        <div class="card-meta">
+          <div class="card-name">git merge --continue</div>
+          <span class="card-cmd">After resolving conflicts</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> You paused building IKEA furniture to find a missing part. Once you've found and placed it, you press "continue" on the assembly process.</div>
+        <p class="card-desc">After manually resolving conflicts and staging the resolved files with <code>git add</code>, this command <strong style="color:#fff">completes the merge</strong> and creates the merge commit.</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge feature</span> <span class="cmd-comment"># CONFLICT!</span></div>
+          <div class="cmd-line"><span class="cmd-comment"># Edit conflicted files manually</span></div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git add resolved-file.js</span></div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge --continue</span> <span class="cmd-comment"># or: git commit</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">→ After fixing conflicts</span>
+          <span class="tag blue">→ Equivalent to git commit here</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🚪</div>
+        <div class="card-meta">
+          <div class="card-name">git merge --quit</div>
+          <span class="card-cmd">Abandon without restoring</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> You stop assembling furniture mid-way and walk away, leaving the half-built chair on the floor. Git forgets the merge was happening, but your mess stays.</div>
+        <p class="card-desc">Like <code>--abort</code> but <strong style="color:#fff">does NOT restore your files</strong>. Clears the merge state (MERGE_HEAD, etc.) while leaving your working directory as-is. Useful if you want to keep manual edits but start fresh with the merge tracking.</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge --quit</span></div>
+          <div class="cmd-comment"># Merge state cleared, files unchanged</div>
+        </div>
+        <div class="when-use">
+          <span class="tag orange">→ Rare, advanced use</span>
+          <span class="tag purple">→ Keep edits, reset merge state</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🔏</div>
+        <div class="card-meta">
+          <div class="card-name">Signed Merge (GPG)</div>
+          <span class="card-cmd">git merge --gpg-sign feature</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> Like notarizing a document. You cryptographically sign the merge commit with your private key, so anyone can verify it was actually you who merged this — not a hacker.</div>
+        <p class="card-desc">Cryptographically signs the merge commit with your GPG key. Useful in security-sensitive projects where you need to verify the identity of who performed a merge. Requires GPG setup.</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git merge --gpg-sign feature</span></div>
+          <div class="cmd-line"><span class="cmd-text">git merge -S feature</span> <span class="cmd-comment"># shorthand</span></div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git log --show-signature</span> <span class="cmd-comment"># verify signatures</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">→ Security-critical projects</span>
+          <span class="tag blue">→ Open source maintainers</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SECTION 5: ALTERNATIVES ═══════════════════════════ -->
+<section class="section" id="alternatives">
+  <div class="section-title">History-Rewriting Alternatives</div>
+  <p class="section-desc">Not true merges, but related workflows that achieve similar integration goals with different trade-offs on history.</p>
+
+  <div class="concepts-grid">
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🪄</div>
+        <div class="card-meta">
+          <div class="card-name">Rebase</div>
+          <span class="card-cmd">git rebase main</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> Instead of merging your edited draft with the original at the end, you secretly reprint all your notes <em>as if</em> you had started from the latest version of the original. The story is the same but the timeline looks cleaner.</div>
+        <p class="card-desc">Moves your branch's commits to a new base commit. <strong style="color:#fff">Rewrites commit history</strong> — commits get new SHAs. Creates a linear history. Never rebase commits that are already pushed to a shared branch.</p>
+        <div class="git-graph">
+          <svg width="400" height="120" viewBox="0 0 400 120">
+            <!-- BEFORE -->
+            <text x="10" y="14" fill="#64748b" font-family="JetBrains Mono" font-size="10">BEFORE</text>
+            <circle cx="30" cy="40" r="11" fill="#f97316"/>
+            <text x="30" y="44" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">A</text>
+            <circle cx="80" cy="40" r="11" fill="#f97316"/>
+            <text x="80" y="44" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">B</text>
+            <circle cx="130" cy="40" r="11" fill="#f97316"/>
+            <text x="130" y="44" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">C</text>
+            <circle cx="80" cy="90" r="11" fill="#ec4899"/>
+            <text x="80" y="94" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">D</text>
+            <circle cx="130" cy="90" r="11" fill="#ec4899"/>
+            <text x="130" y="94" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">E</text>
+            <line x1="41" y1="40" x2="69" y2="40" stroke="#374151" stroke-width="1.5"/>
+            <line x1="91" y1="40" x2="119" y2="40" stroke="#374151" stroke-width="1.5"/>
+            <line x1="41" y1="45" x2="69" y2="85" stroke="#374151" stroke-width="1.5"/>
+            <line x1="91" y1="90" x2="119" y2="90" stroke="#374151" stroke-width="1.5"/>
+            <text x="130" y="14" fill="#f97316" font-size="9" font-family="JetBrains Mono" text-anchor="middle">main→C</text>
+            <text x="130" y="108" fill="#ec4899" font-size="9" font-family="JetBrains Mono" text-anchor="middle">feat→E</text>
+            <!-- arrow -->
+            <text x="185" y="65" fill="#a855f7" font-size="20" text-anchor="middle">→</text>
+            <!-- AFTER -->
+            <text x="210" y="14" fill="#64748b" font-family="JetBrains Mono" font-size="10">AFTER rebase</text>
+            <circle cx="230" cy="60" r="11" fill="#f97316"/>
+            <text x="230" y="64" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">A</text>
+            <circle cx="270" cy="60" r="11" fill="#f97316"/>
+            <text x="270" y="64" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">B</text>
+            <circle cx="310" cy="60" r="11" fill="#f97316"/>
+            <text x="310" y="64" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">C</text>
+            <circle cx="350" cy="60" r="11" fill="#ec4899"/>
+            <text x="350" y="64" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">D'</text>
+            <circle cx="390" cy="60" r="11" fill="#ec4899"/>
+            <text x="390" y="64" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">E'</text>
+            <line x1="241" y1="60" x2="259" y2="60" stroke="#374151" stroke-width="1.5"/>
+            <line x1="281" y1="60" x2="299" y2="60" stroke="#374151" stroke-width="1.5"/>
+            <line x1="321" y1="60" x2="339" y2="60" stroke="#374151" stroke-width="1.5"/>
+            <line x1="361" y1="60" x2="379" y2="60" stroke="#374151" stroke-width="1.5"/>
+            <text x="350" y="82" fill="#ec4899" font-size="8" font-family="JetBrains Mono" text-anchor="middle">new SHAs!</text>
+          </svg>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git checkout feature</span></div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git rebase main</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">✓ Linear clean history</span>
+          <span class="tag red">✗ Rewrites commits (new SHAs)</span>
+          <span class="tag red">✗ Never on shared branches</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🎛️</div>
+        <div class="card-meta">
+          <div class="card-name">Interactive Rebase</div>
+          <span class="card-cmd">git rebase -i HEAD~5</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> A film editor with the raw footage. You can reorder scenes, cut out bad takes, combine multiple shots into one, or rewrite dialog before the final cut is published.</div>
+        <p class="card-desc">Opens an editor showing the last N commits. You can <strong style="color:#fff">reorder, squash, drop, edit, or reword</strong> any commit. The most powerful history-cleanup tool. Use before pushing to clean up a messy local branch.</p>
+        <div class="cmd-block">
+          <div class="cmd-comment"># Opens editor with list like:</div>
+          <div class="cmd-line"><span class="cmd-text">pick a1b2c3 Fix typo</span></div>
+          <div class="cmd-line"><span class="cmd-text">squash d4e5f6 WIP: half-done feature</span></div>
+          <div class="cmd-line"><span class="cmd-text">reword 7g8h9i Finish feature</span></div>
+          <div class="cmd-line"><span class="cmd-text">drop bad000 "debugging remove me"</span></div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git rebase -i HEAD~4</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">✓ Polish before PR review</span>
+          <span class="tag purple">→ Combine WIP commits</span>
+          <span class="tag red">✗ Local branches only</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🏛️</div>
+        <div class="card-meta">
+          <div class="card-name">Rebase with Merge Preservation</div>
+          <span class="card-cmd">git rebase --rebase-merges main</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> Moving a complex filing system to a new office. Instead of flattening all folders into one pile, you move everything while preserving the entire folder structure — just with the new address.</div>
+        <p class="card-desc">By default, rebase flattens merge commits. <code>--rebase-merges</code> <strong style="color:#fff">preserves the merge commit topology</strong> while still rebasing onto the new base. Essential when rebasing a branch that has its own internal merges.</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git rebase --rebase-merges main</span></div>
+          <div class="cmd-comment"># Keeps internal merge structure intact</div>
+        </div>
+        <div class="when-use">
+          <span class="tag blue">→ Branches with internal merges</span>
+          <span class="tag green">✓ Preserves topology</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">🍒</div>
+        <div class="card-meta">
+          <div class="card-name">Cherry-Pick</div>
+          <span class="card-cmd">git cherry-pick a1b2c3</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> From a whole fruit basket (another branch), you reach in and grab exactly the one cherry you want — without taking the basket. One specific commit, applied onto your current branch.</div>
+        <p class="card-desc">Applies a <strong style="color:#fff">specific commit from any branch</strong> onto your current branch. Creates a new commit with the same changes but a new SHA. Great for hotfixes — apply a fix to both <code>main</code> and an older release branch.</p>
+        <div class="git-graph">
+          <svg width="360" height="100" viewBox="0 0 360 100">
+            <circle cx="30" cy="30" r="11" fill="#f97316"/>
+            <text x="30" y="34" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">A</text>
+            <circle cx="80" cy="30" r="11" fill="#3b82f6"/>
+            <text x="80" y="34" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">X</text>
+            <circle cx="130" cy="30" r="11" fill="#3b82f6"/>
+            <text x="130" y="34" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">Y</text>
+            <circle cx="30" cy="80" r="11" fill="#f97316"/>
+            <text x="30" y="84" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">B</text>
+            <circle cx="80" cy="80" r="11" fill="#f97316"/>
+            <text x="80" y="84" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">C</text>
+            <circle cx="140" cy="80" r="13" fill="#ec4899" stroke="#ec4899" stroke-width="2"/>
+            <text x="140" y="84" fill="white" font-size="9" font-family="JetBrains Mono" text-anchor="middle">X'</text>
+            <line x1="41" y1="30" x2="69" y2="30" stroke="#374151" stroke-width="1.5"/>
+            <line x1="91" y1="30" x2="119" y2="30" stroke="#374151" stroke-width="1.5"/>
+            <line x1="41" y1="80" x2="69" y2="80" stroke="#374151" stroke-width="1.5"/>
+            <line x1="91" y1="80" x2="127" y2="80" stroke="#374151" stroke-width="1.5"/>
+            <!-- cherry pick arrow -->
+            <path d="M80,41 Q80,60 130,70" stroke="#ec4899" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arr-pink)"/>
+            <text x="130" y="14" fill="#3b82f6" font-size="9" font-family="JetBrains Mono" text-anchor="middle">feature</text>
+            <text x="80" y="98" fill="#f97316" font-size="9" font-family="JetBrains Mono" text-anchor="middle">main</text>
+            <text x="225" y="58" fill="#ec4899" font-size="9" font-family="JetBrains Mono">cherry-pick X</text>
+            <text x="225" y="70" fill="#ec4899" font-size="9" font-family="JetBrains Mono">→ new commit X'</text>
+            <defs>
+              <marker id="arr-pink" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#ec4899"/>
+              </marker>
+            </defs>
+          </svg>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git cherry-pick a1b2c3</span> <span class="cmd-comment"># one commit</span></div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git cherry-pick a1b2c3..d4e5f6</span> <span class="cmd-comment"># range</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">→ Hotfix to multiple branches</span>
+          <span class="tag blue">→ Cherry-pick only needed commits</span>
+          <span class="tag orange">⚠ Creates duplicate commits</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="card-header">
+        <div class="card-icon">↩️</div>
+        <div class="card-meta">
+          <div class="card-name">Revert Merge Commit</div>
+          <span class="card-cmd">git revert -m 1 HEAD</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analogy"><strong>📚 Analogy:</strong> Instead of tearing up the signed contract (rewriting history), you issue a formal amendment that says "we're undoing everything in that last agreement." The original contract still exists in the records.</div>
+        <p class="card-desc">Creates a <strong style="color:#fff">new commit that undoes</strong> the changes introduced by a merge commit. Safe for shared branches — doesn't rewrite history. The <code>-m 1</code> flag tells Git which parent is the "mainline" (usually 1 = your branch).</p>
+        <div class="cmd-block">
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git revert -m 1 HEAD</span></div>
+          <div class="cmd-comment"># -m 1 = keep the mainline (first parent = your branch)</div>
+          <div class="cmd-comment"># -m 2 = keep the merged branch's content</div>
+          <div class="cmd-line"><span class="cmd-prompt">$</span><span class="cmd-text">git push</span> <span class="cmd-comment"># safe to push!</span></div>
+        </div>
+        <div class="when-use">
+          <span class="tag green">✓ Safe for shared branches</span>
+          <span class="tag blue">✓ History preserved</span>
+          <span class="tag orange">⚠ Re-merging same branch needs care</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SECTION 6: COMPARE ═══════════════════════════ -->
+<section class="section" id="compare">
+  <div class="section-title">Compare All Methods</div>
+  <p class="section-desc">Side-by-side comparison of every method's key properties to help you choose the right tool.</p>
+
+  <div style="overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 40px;">
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Creates Merge Commit?</th>
+          <th>Rewrites History?</th>
+          <th>Linear History?</th>
+          <th>Safe on Shared?</th>
+          <th>Best For</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Fast-forward</strong></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td>No divergence, quick update</td>
+        </tr>
+        <tr>
+          <td><strong>Three-way merge</strong></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td>Diverged branches, preserve context</td>
+        </tr>
+        <tr>
+          <td><strong>--no-ff</strong></td>
+          <td><span class="check">✓ Always</span></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td>Feature branches, visible grouping</td>
+        </tr>
+        <tr>
+          <td><strong>--squash</strong></td>
+          <td><span class="dash">~ You commit it</span></td>
+          <td><span class="check">✓ Condenses</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td>Clean PR merges, polished history</td>
+        </tr>
+        <tr>
+          <td><strong>Octopus</strong></td>
+          <td><span class="check">✓ Multi-parent</span></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td>Multiple independent branches</td>
+        </tr>
+        <tr>
+          <td><strong>-s ours</strong></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td>Retiring dead branches</td>
+        </tr>
+        <tr>
+          <td><strong>Rebase</strong></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td><span class="red cross">✗ No</span></td>
+          <td>Local cleanup before push</td>
+        </tr>
+        <tr>
+          <td><strong>Interactive rebase</strong></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td><span class="red cross">✗ No</span></td>
+          <td>Polish commits before PR</td>
+        </tr>
+        <tr>
+          <td><strong>Cherry-pick</strong></td>
+          <td><span class="cross">✗ (new commit)</span></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td>Specific commit to another branch</td>
+        </tr>
+        <tr>
+          <td><strong>Revert merge</strong></td>
+          <td><span class="cross">✗ (new revert)</span></td>
+          <td><span class="cross">✗ No</span></td>
+          <td><span class="dash">~ Adds commit</span></td>
+          <td><span class="check">✓ Yes</span></td>
+          <td>Undo a bad merge safely</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Decision tree -->
+  <div class="section-title" style="font-size:1.2rem; margin-bottom:16px;">🌳 Quick Decision Guide</div>
+  <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; overflow-x: auto;">
+    <div class="decision-tree">
+      <div class="dt-row"><div class="dt-node dt-question">Want to integrate changes from another branch?</div></div>
+      <div style="color:var(--muted); text-align:center; margin: 4px 0;">↓</div>
+      <div class="dt-row">
+        <div class="dt-col">
+          <div class="dt-node dt-question">No divergence?<br>(linear history ok?)</div>
+          <div class="dt-arrow">↓ yes</div>
+          <div class="dt-node dt-answer">⚡ Fast-forward<br>(or --no-ff to record)</div>
+        </div>
+        <div class="dt-col">
+          <div class="dt-node dt-question">Branches diverged?</div>
+          <div class="dt-arrow">↓ yes</div>
+          <div class="dt-node dt-question">Want linear history?</div>
+          <div class="dt-row">
+            <div class="dt-col">
+              <div style="font-size:0.75rem; color:var(--muted)">yes (local only)</div>
+              <div class="dt-node dt-answer">🪄 Rebase<br>then merge</div>
+            </div>
+            <div class="dt-col">
+              <div style="font-size:0.75rem; color:var(--muted)">no (safe)</div>
+              <div class="dt-node dt-answer">🔀 Three-way<br>merge --no-ff</div>
+            </div>
+          </div>
+        </div>
+        <div class="dt-col">
+          <div class="dt-node dt-question">Only need one commit?</div>
+          <div class="dt-arrow">↓ yes</div>
+          <div class="dt-node dt-answer">🍒 Cherry-pick</div>
+        </div>
+        <div class="dt-col">
+          <div class="dt-node dt-question">Clean up many commits?</div>
+          <div class="dt-arrow">↓ yes</div>
+          <div class="dt-node dt-answer">🗜️ Squash or<br>interactive rebase</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SECTION 7: CHEATSHEET ═══════════════════════════ -->
+<section class="section" id="cheatsheet">
+  <div class="section-title">⚡ Cheatsheet</div>
+  <p class="section-desc">All the commands in one place. Bookmark this tab.</p>
+
+  <div class="cheatsheet-grid">
+
+    <div class="cheat-card">
+      <h4>Core Merge Types</h4>
+      <div class="cheat-row"><span class="cheat-cmd">git merge feat</span><span class="cheat-desc">Auto (ff or 3-way)</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git merge --no-ff feat</span><span class="cheat-desc">Force merge commit</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git merge --squash feat</span><span class="cheat-desc">Squash all into staged</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git merge a b c</span><span class="cheat-desc">Octopus: merge 3 branches</span></div>
+    </div>
+
+    <div class="cheat-card">
+      <h4>Merge Strategies</h4>
+      <div class="cheat-row"><span class="cheat-cmd">-s ort</span><span class="cheat-desc">Default modern strategy</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">-s recursive</span><span class="cheat-desc">Older default strategy</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">-s resolve</span><span class="cheat-desc">Simple 2-head only</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">-s ours</span><span class="cheat-desc">Discard their changes</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">-s subtree</span><span class="cheat-desc">Merge into subdirectory</span></div>
+    </div>
+
+    <div class="cheat-card">
+      <h4>Strategy Modifiers (-X)</h4>
+      <div class="cheat-row"><span class="cheat-cmd">-X ours</span><span class="cheat-desc">Auto-pick our side</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">-X theirs</span><span class="cheat-desc">Auto-pick their side</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">-X patience</span><span class="cheat-desc">Smarter diff algo</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">-X ignore-space-change</span><span class="cheat-desc">Ignore whitespace diff</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">--allow-unrelated</span><span class="cheat-desc">Different repo histories</span></div>
+    </div>
+
+    <div class="cheat-card">
+      <h4>Merge Management</h4>
+      <div class="cheat-row"><span class="cheat-cmd">git merge --abort</span><span class="cheat-desc">Cancel, restore files</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git merge --continue</span><span class="cheat-desc">Complete after conflict fix</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git merge --quit</span><span class="cheat-desc">Clear state, keep files</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git merge -S feat</span><span class="cheat-desc">GPG-sign merge commit</span></div>
+    </div>
+
+    <div class="cheat-card">
+      <h4>Rebase</h4>
+      <div class="cheat-row"><span class="cheat-cmd">git rebase main</span><span class="cheat-desc">Rebase branch onto main</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git rebase -i HEAD~5</span><span class="cheat-desc">Interactive: edit last 5</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git rebase --rebase-merges</span><span class="cheat-desc">Preserve merge topology</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git rebase --abort</span><span class="cheat-desc">Cancel rebase</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git rebase --continue</span><span class="cheat-desc">After fixing conflicts</span></div>
+    </div>
+
+    <div class="cheat-card">
+      <h4>Alternatives</h4>
+      <div class="cheat-row"><span class="cheat-cmd">git cherry-pick SHA</span><span class="cheat-desc">Apply one commit</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git cherry-pick A..B</span><span class="cheat-desc">Apply range of commits</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git revert -m 1 HEAD</span><span class="cheat-desc">Undo merge safely</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git log --merges</span><span class="cheat-desc">Show only merge commits</span></div>
+      <div class="cheat-row"><span class="cheat-cmd">git log --graph</span><span class="cheat-desc">Visual branch graph</span></div>
+    </div>
+
+  </div>
+
+  <!-- Golden rules -->
+  <div style="margin-top: 40px; background: linear-gradient(135deg, rgba(16,185,129,0.06), rgba(59,130,246,0.06)); border: 1px solid rgba(16,185,129,0.2); border-radius: 12px; padding: 28px 32px;">
+    <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; letter-spacing:2px; text-transform:uppercase; color:var(--accent3); margin-bottom:16px;">🏆 The Golden Rules</div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; font-size: 0.88rem; color:#94a3b8; line-height:1.6;">
+      <div>📌 <strong style="color:#fff">Never rebase shared/public branches.</strong> Rebase rewrites history — others who pulled the old commits will have a bad time.</div>
+      <div>📌 <strong style="color:#fff">Use --no-ff for feature branches</strong> on team projects so you can see clearly where features begin and end in the log.</div>
+      <div>📌 <strong style="color:#fff">-s ours ≠ -X ours.</strong> Strategy discards all; modifier just auto-resolves conflicts in your favor.</div>
+      <div>📌 <strong style="color:#fff">Prefer revert over reset</strong> when undoing published merges. Revert creates a new commit — history is preserved.</div>
+      <div>📌 <strong style="color:#fff">Squash for clean PR merges</strong> when individual commits are WIP notes. Use 3-way for preserving meaningful history.</div>
+      <div>📌 <strong style="color:#fff">Always git merge --abort</strong> if you're unsure how to resolve a conflict — there's no shame in starting fresh.</div>
+    </div>
+  </div>
+</section>
+
+<script>
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+
+</body>
+</html>
