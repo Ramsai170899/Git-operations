@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ git merge · pro visual compact</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #eaf3fc;
+            font-family: 'Inter', 'Segoe UI', 'Fira Code', system-ui, monospace;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            color: #0b2a41;
+            overflow: hidden;
+        }
+
+        .dashboard {
+            max-width: 1500px;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #ffffffd9;
+            backdrop-filter: blur(2px);
+            border-radius: 48px;
+            padding: 22px 28px;
+            box-shadow: 0 20px 40px -12px #1e4f7a;
+            border: 2px solid #b5d4ff;
+            overflow: hidden;
+        }
+
+        /* header section — minimal */
+        .top-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        h1 {
+            font-weight: 600;
+            font-size: 2.2rem;
+            background: linear-gradient(150deg, #0b3f62, #1f6fb0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .head-pill {
+            background: #1e4770;
+            color: white;
+            padding: 8px 28px;
+            border-radius: 60px;
+            font-weight: 500;
+            font-size: 1.3rem;
+            box-shadow: inset 0 -3px 0 #0e2c44;
+            border: 1px solid #9dc6ff;
+        }
+
+        /* two‑law banner — compact */
+        .law-bar {
+            background: #c1dcfd;
+            border-radius: 100px;
+            padding: 8px 30px;
+            margin-bottom: 18px;
+            display: flex;
+            gap: 30px;
+            font-weight: 600;
+            font-size: 1.2rem;
+            border: 1px solid #8bb9f0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .law-code {
+            background: #112f48;
+            color: #ffecaa;
+            padding: 4px 20px;
+            border-radius: 60px;
+            margin-right: 12px;
+        }
+
+        /* core panel: graph + controls (flex, no overflow) */
+        .core-panel {
+            display: flex;
+            gap: 20px;
+            flex: 1;
+            min-height: 0;  /* flex restriction */
+        }
+
+        .graph-card {
+            flex: 2;
+            background: #f1f9ff;
+            border-radius: 40px;
+            padding: 22px 20px;
+            border: 2px solid #b0d1f0;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 18px #c1d9f0;
+        }
+
+        .graph-title {
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            padding: 0 8px;
+        }
+
+        .ascii-graph {
+            background: #132433;
+            color: #c6e2ff;
+            font-family: 'Fira Code', 'JetBrains Mono', monospace;
+            font-size: 1.4rem;
+            line-height: 1.9rem;
+            padding: 20px 20px;
+            border-radius: 32px;
+            border: 3px solid #7bb3e0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            flex: 1;
+            min-height: 180px;
+            box-shadow: inset 0 0 16px #00000040;
+            letter-spacing: 1px;
+        }
+
+        .desc-tag {
+            background: #ddeeff;
+            margin-top: 12px;
+            padding: 14px 22px;
+            border-radius: 50px;
+            font-size: 1rem;
+            border-left: 12px solid #1d6fb0;
+            font-weight: 500;
+            line-height: 1.4;
+        }
+
+        .badge-strip {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .concept-badge {
+            background: #345e88;
+            color: white;
+            padding: 6px 18px;
+            border-radius: 40px;
+            font-size: 0.85rem;
+            font-weight: 400;
+            white-space: nowrap;
+        }
+
+        /* control panel — dropdown style to save space */
+        .control-card {
+            flex: 1;
+            background: #e3f0ff;
+            border-radius: 40px;
+            padding: 22px 16px;
+            border: 2px solid #a6c6ee;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            min-width: 280px;
+            box-shadow: 0 8px 14px #b7d0ea;
+        }
+
+        .control-card h2 {
+            font-size: 1.8rem;
+            font-weight: 500;
+            color: #0c3d63;
+            margin: 0 0 4px 10px;
+        }
+
+        .dropdown-group {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;  /* only dropdowns scroll if needed, but we limit height */
+            padding-right: 4px;
+        }
+
+        .dropdown-cat {
+            background: #ffffffb3;
+            border-radius: 28px;
+            padding: 12px 16px;
+            border: 2px solid #80acd9;
+        }
+
+        .dropdown-cat label {
+            font-weight: 700;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 1.1rem;
+            color: #003157;
+            padding-left: 6px;
+        }
+
+        select {
+            width: 100%;
+            padding: 14px 18px;
+            font-size: 1rem;
+            font-weight: 500;
+            border: 2px solid #276ba3;
+            border-radius: 60px;
+            background: white;
+            color: #0f3857;
+            cursor: pointer;
+            outline: none;
+            transition: 0.1s;
+            appearance: none;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="%232167b0" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 18px center;
+            background-size: 20px;
+        }
+
+        select:hover {
+            border-color: #edb034;
+            background-color: #fcf9f0;
+        }
+
+        .btn-reset {
+            background: #ffffff;
+            border: 2px solid #345e88;
+            padding: 14px 20px;
+            border-radius: 60px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #99badd;
+            transition: 0.1s;
+            margin-top: 8px;
+            color: #1c4b73;
+        }
+
+        .btn-reset:hover {
+            background: #ffeeb5;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 0 #a3bddb;
+        }
+
+        .legend-mini {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 20px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            background: #fff;
+            padding: 12px 16px;
+            border-radius: 60px;
+            border: 1px solid #98bde0;
+        }
+
+        /* no scroll on body */
+        .dashboard, .core-panel, .graph-card, .control-card {
+            overflow: hidden;
+        }
+        .dropdown-group {
+            overflow-y: auto;
+            max-height: 380px;  /* keeps everything visible */
+            scrollbar-width: thin;
+        }
+    </style>
+</head>
+<body>
+<div class="dashboard">
+    <!-- top area -->
+    <div class="top-row">
+        <h1>⚡ git merge · visual pro</h1>
+        <span class="head-pill">HEAD: <span id="headRef">main</span></span>
+    </div>
+    <!-- law summary -->
+    <div class="law-bar">
+        <span><span class="law-code">⬆️ move pointer</span> fast‑forward</span>
+        <span><span class="law-code">🧩 two+ parents</span> merge commit</span>
+    </div>
+
+    <!-- main graph + compact controls -->
+    <div class="core-panel">
+        <!-- visual graph area (left) -->
+        <div class="graph-card">
+            <div class="graph-title">
+                <span>📋 commit graph</span>
+                <span style="color:#1f5891;">live</span>
+            </div>
+            <div class="ascii-graph" id="graphDisplay">
+                o (main) first commit<br>│<br>o second<br>│<br>o (feature) third
+            </div>
+            <div class="desc-tag" id="conceptDesc">
+                ✨ base: main behind feature (fast‑forward possible)
+            </div>
+            <div class="badge-strip">
+                <span class="concept-badge">fast‑forward</span>
+                <span class="concept-badge">three‑way</span>
+                <span class="concept-badge">--no-ff</span>
+                <span class="concept-badge">squash</span>
+                <span class="concept-badge">octopus</span>
+                <span class="concept-badge">conflict</span>
+                <span class="concept-badge">-X theirs</span>
+                <span class="concept-badge">-s ours</span>
+                <span class="concept-badge">rebase</span>
+            </div>
+        </div>
+
+        <!-- right control panel: fully dropdown based (no scroll for whole page) -->
+        <div class="control-card">
+            <h2>⚙️ command</h2>
+            <div class="dropdown-group">
+                <!-- category 1: core merges -->
+                <div class="dropdown-cat">
+                    <label>🔷 1 · fundamental merges</label>
+                    <select id="coreMergeSelect">
+                        <option value="base" selected>— select core action —</option>
+                        <option value="ff">🔀 fast‑forward merge</option>
+                        <option value="threeway">🌉 three‑way (true merge)</option>
+                        <option value="noff">🚫 --no-ff (no fast forward)</option>
+                        <option value="squash">📦 squash merge (--squash)</option>
+                        <option value="octopus">🐙 octopus (3 branches)</option>
+                    </select>
+                </div>
+                <!-- category 2: conflict / strategies -->
+                <div class="dropdown-cat">
+                    <label>⚔️ 2 · conflict & strategies</label>
+                    <select id="strategySelect">
+                        <option value="base2">— choose strategy —</option>
+                        <option value="conflict">⚔️ merge with conflict</option>
+                        <option value="ours">🛡️ ours (-s ours)</option>
+                        <option value="xtheirs">🎭 -X theirs (auto resolve)</option>
+                        <option value="ort">🧠 ORT / recursive</option>
+                        <option value="subtree">🌲 subtree strategy</option>
+                    </select>
+                </div>
+                <!-- category 3: management & alt -->
+                <div class="dropdown-cat">
+                    <label>⏯️ 3 · flow & modifiers</label>
+                    <select id="managementSelect">
+                        <option value="base3">— manage / alter —</option>
+                        <option value="abort">⏹️ merge --abort</option>
+                        <option value="continue">▶️ merge --continue</option>
+                        <option value="rebase">🔁 rebase (alternative)</option>
+                        <option value="cherry">🍒 cherry-pick (commit F)</option>
+                        <option value="unrelated">🌿 --allow-unrelated-histories</option>
+                        <option value="sign">🔏 --gpg-sign</option>
+                    </select>
+                </div>
+                <!-- reset button inline -->
+                <button class="btn-reset" id="resetBtn">⟲ reset to base graph</button>
+            </div>
+
+            <!-- mini legend (reassuring compact) -->
+            <div class="legend-mini">
+                <span>⬆️ ff</span> <span>🧩 3‑way</span> <span>🐙 octopus</span> <span>⚔️ conflict</span> <span>🎭 theirs</span> <span>⏹️ abort</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ----- state -----
+        let currentGraph = {
+            ascii: "o (main) first commit\n|\no second\n|\no (feature) third",
+            head: "main",
+            desc: "✨ base: main behind feature (fast‑forward possible)."
+        };
+
+        const graphEl = document.getElementById('graphDisplay');
+        const headEl = document.getElementById('headRef');
+        const descEl = document.getElementById('conceptDesc');
+
+        function render() {
+            graphEl.innerText = currentGraph.ascii;
+            headEl.innerText = currentGraph.head;
+            descEl.innerText = currentGraph.desc;
+        }
+
+        function setGraph(ascii, head, desc) {
+            currentGraph.ascii = ascii;
+            currentGraph.head = head;
+            currentGraph.desc = desc;
+            render();
+        }
+
+        // base reset (same as initial)
+        function resetBase() {
+            setGraph(
+                "o (main) first commit\n|\no second\n|\no (feature) third",
+                "main",
+                "✨ base: main behind feature (fast‑forward possible)."
+            );
+            // reset all dropdowns to default placeholder (value 'base' etc)
+            document.getElementById('coreMergeSelect').value = 'base';
+            document.getElementById('strategySelect').value = 'base2';
+            document.getElementById('managementSelect').value = 'base3';
+        }
+
+        // --- dropdown listeners ---
+        const coreSelect = document.getElementById('coreMergeSelect');
+        const stratSelect = document.getElementById('strategySelect');
+        const mgmtSelect = document.getElementById('managementSelect');
+
+        function handleCoreChange() {
+            const val = coreSelect.value;
+            if (val === 'base') return;
+            stratSelect.value = 'base2';   // reset others
+            mgmtSelect.value = 'base3';
+
+            if (val === 'ff') setGraph(
+                "o (main,feature) first commit\n|\no second\n|\no third",
+                "main (feature)",
+                "▶️ fast‑forward: main pointer moved to feature. no new commit."
+            );
+            else if (val === 'threeway') setGraph(
+                "o first commit\n|\\\n| o second (main)\n|\n o (feature) feature work\n \\\n  o merge commit M (main)",
+                "main",
+                "🌉 three‑way merge: M has two parents (main & feature)."
+            );
+            else if (val === 'noff') setGraph(
+                "o (main) first\n|\no second\n|\\\n| o (feature) third\n|/\no merge commit (main)",
+                "main",
+                "⛔ --no-ff: forced merge commit even if fast‑forward possible."
+            );
+            else if (val === 'squash') setGraph(
+                "o (main) first\n|\no second\n|\n○ squash commit (squashed feature)\n|\n(main)",
+                "main",
+                "📦 squash merge: feature commits squashed into one, no parent link."
+            );
+            else if (val === 'octopus') setGraph(
+                "   o (branchA) A\n  /\n---o (main) root\n  \\\n   o (branchB) B\n    \\\n     o (octopus merge M) main",
+                "main",
+                "🐙 octopus merge: main + branchA + branchB in one commit."
+            );
+        }
+
+        function handleStrategyChange() {
+            const val = stratSelect.value;
+            if (val === 'base2') return;
+            coreSelect.value = 'base';
+            mgmtSelect.value = 'base3';
+
+            if (val === 'conflict') setGraph(
+                "o (main) file.txt: hello world\n|\n conflicting (feature): hello git\n|\n<<<<<<< main\nworld\n=======\ngit\n>>>>>>> feature",
+                "main (MERGING)",
+                "⚔️ conflict: same line changed. manual resolution needed."
+            );
+            else if (val === 'ours') setGraph(
+                "o (main) first\n|\\\n| o (feature) ignored content\n|/\no merge commit (keeps main tree)",
+                "main",
+                "🛡️ -s ours: result = main's tree, but feature history merged."
+            );
+            else if (val === 'xtheirs') setGraph(
+                "conflicting hunks → auto resolved using theirs\n(o) main: 'hello world'\n(o) theirs selected => 'hello git'",
+                "main",
+                "🎭 -X theirs: on conflict, take feature version automatically."
+            );
+            else if (val === 'ort') setGraph(
+                "o (main) A\n|\\\n| o (feature) B\n|/\no merge M (using ort/recursive)",
+                "main",
+                "⚙️ ORT (modern recursive) – smart rename/merge."
+            );
+            else if (val === 'subtree') setGraph(
+                "main: lib/   |   subrepo: src/ → merged into lib/src\n(merge commit M)",
+                "main",
+                "🌲 subtree strategy: external repo merged into subdir."
+            );
+        }
+
+        function handleMgmtChange() {
+            const val = mgmtSelect.value;
+            if (val === 'base3') return;
+            coreSelect.value = 'base';
+            stratSelect.value = 'base2';
+
+            if (val === 'abort') setGraph(
+                "o (main) first commit\n|\no second\n|\no (feature) third",
+                "main",
+                "⏹️ merge --abort: stopped merge, back to pre‑merge state."
+            );
+            else if (val === 'continue') setGraph(
+                "o first\n|\\\n| o (main) resolved merge\n|/ \nM (merged main)",
+                "main",
+                "✅ merge --continue: after manual add, creates merge commit."
+            );
+            else if (val === 'rebase') setGraph(
+                "o (main) first\n|\no second\n|\no third (feature rebased)   [was on older]",
+                "feature",
+                "🔁 rebase: feature commits reapplied on top of main."
+            );
+            else if (val === 'cherry') setGraph(
+                "o (main) first\n|\no second\n|\no F' (cherry-picked from feature)",
+                "main",
+                "🍒 cherry-pick commit F (from feature) into main, new SHA."
+            );
+            else if (val === 'unrelated') setGraph(
+                "repo A: o---o (main)\nrepo B: o---o (other)\n--- merge (--allow-unrelated) ---> o (combined)",
+                "main",
+                "🌿 allow-unrelated: merges two independent roots."
+            );
+            else if (val === 'sign') setGraph(
+                "o (main) first\n|\\\n| o feature\n|/\no [signed] merge commit (GPG)",
+                "main",
+                "🔏 signed merge: commit cryptographically verified."
+            );
+        }
+
+        // reset button
+        document.getElementById('resetBtn').addEventListener('click', resetBase);
+
+        // add listeners
+        coreSelect.addEventListener('change', handleCoreChange);
+        stratSelect.addEventListener('change', handleStrategyChange);
+        mgmtSelect.addEventListener('change', handleMgmtChange);
+
+        // initial render
+        resetBase();
+
+        // additionally, make sure dropdowns don't stay on values after reset
+        window.resetBase = resetBase; 
+    })();
+</script>
+</body>
+</html>
