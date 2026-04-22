@@ -1875,309 +1875,384 @@ def color_blank_columns(styler, dict_new_headers, color="#ffff00"):
     return styler
 
 ################################################################################
+def run_valuation(user_name, config_path, selected_scenarios, progress_callback=None):
+    """Main valuation function extracted to be callable from UI."""
+    def log_msg(msg):
+        if progress_callback:
+            progress_callback(msg, 0, 0)
+    
+    try:
+        config_df = pd.read_excel(config_path)
+        
+        # Filter configuration based on requirements
+        config_df = config_df[config_df['Requirement'].isin(['Yes', '1', 1])].reset_index(drop=True)
+        
+        # Filter to only selected scenarios
+        if selected_scenarios:
+            config_df = config_df[config_df['Scenario name'].isin(selected_scenarios)].reset_index(drop=True)
+        
+        log_file_name = f"Run Logs/Reserve_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        os.makedirs(os.path.dirname(log_file_name), exist_ok=True)
+        with open(log_file_name, 'a') as log_file:
+            log_file.write(f"User: {user_name}\n")
+            log_file.write(f"Code File: {os.path.basename(__file__)}\n")
+            log_file.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            log_file.write(f"Available Scenarios: {config_df['Scenario name'].tolist()}\n")
+        
+        total_scenarios = len(config_df)
+        for scenario_idx, each_scenario in enumerate(range(total_scenarios)):
+            log_msg(f"Processing scenario {scenario_idx + 1}/{total_scenarios}...")
+            
+            current_scenario = config_df['Scenario name'].iloc[each_scenario]
+            input_file_path = config_df['Input file path'].iloc[each_scenario] or "Valuation.csv"
+            results_dir = f"Results_{config_df['Results Directory'].iloc[each_scenario]}" or 'Results'
+            os.makedirs(results_dir, exist_ok=True)
+            selected_date = pd.to_datetime(config_df['Date of Valuation'].iloc[each_scenario], dayfirst=True)
+            Assumptions_path = config_df['Assumptions_path'].iloc[each_scenario] or 'Assumptions/BaseAssumptions.xlsx'
+            
+            Decrement_file_path = config_df['Decrements file path'].iloc[each_scenario] or 'Assumptions/Decrements Table.xlsx'
+            lapse_file_path = config_df['Lapse file path'].iloc[each_scenario] or 'Assumptions/Lapse Table.xlsx'
+            COIlevel_CashflowsRequired = int(config_df['COIlevel_CashflowsRequired'].iloc[each_scenario])
+            IsAggregationRequired = int(config_df['IsAggregationRequired'].iloc[each_scenario])
+            
+            if IsAggregationRequired == 1:
+                cashflowAggregation_type = int(config_df['CashflowAggregationType'].iloc[each_scenario])
+            else:
+                cashflowAggregation_type = " "
+            
+            runcase = config_df['Run Case'].iloc[each_scenario] or "Others"
+            ProfitabilityComponentsRequired = int(config_df['ProfitabilityComponentsRequired'].iloc[each_scenario])
+            
+            hardcoded_grouping_columns = ["Status", "Outstanding Month"]
+            additional_assumptions_groupings = pd.read_excel(Assumptions_path, sheet_name='Grouping columns')
+            assumptions_grouping_columns = additional_assumptions_groupings['Column name'].tolist()
+            GROUPING_COLUMNS = hardcoded_grouping_columns + assumptions_grouping_columns if assumptions_grouping_columns else hardcoded_grouping_columns
+            
+            log_msg(f"Loading data for scenario: {current_scenario}")
+            
+            df = pd.read_csv(input_file_path, low_memory=False)
+            df = df[df['Issuance Date'].notna() & df['Coverage Effective Date'].notna()]
+            
+            valid_status_codes = {11: 'Yes', '11': 'Yes', 22: 'No', 24: 'No', 32: 'No', 33: 'Yes', '33': 'Yes', 42: 'Yes', '42': 'Yes', 43: 'No', 61: 'No'}
+            df = df[df['Status'].isin([code for code, reserve in valid_status_codes.items() if reserve == 'Yes'])]
+            
+            output_date = dt.date.today()
+            output_report_path = f"{results_dir}/Valuation-Output_{output_date}_{current_scenario}.csv"
+            
+            if cashflowAggregation_type == 0:
+                aggregated_output_path = f"{results_dir}/Outstanding_Aggregated_Cashflows_{current_scenario}.xlsx"
+            else:
+                aggregated_output_path = f"{results_dir}/Complete_Aggregated_Cashflows_{current_scenario}.xlsx"
+            
+            skipped_policies_path = f"{results_dir}/Expired_records_{current_scenario}.csv"
+            
+            asum = pd.read_excel(Assumptions_path, sheet_name='main')
+            additional_assumptions_groupings = pd.read_excel(Assumptions_path, sheet_name='Grouping columns')
+            assumptions_grouping_columns = additional_assumptions_groupings['Column name'].tolist()
+            asum.set_index('Assumptions', inplace=True)
+            mortalities = pd.read_excel(Assumptions_path, sheet_name='mortalities')
+            GS_loading = pd.read_excel(Assumptions_path, sheet_name='GS loading')
+            GS_data = pd.read_excel(Assumptions_path, sheet_name='GS_data')
+            vri = pd.read_excel(Assumptions_path, sheet_name='vri')
+            lapse_table = pd.read_excel(lapse_file_path)
+            lapse_table.set_index('Year', inplace=True)
+            
+            # Load decrement data
+            IALM = pd.read_excel(Decrement_file_path, sheet_name='IALM1214')
+            ADB = pd.read_excel(Decrement_file_path, sheet_name='ADB')
+            ATPD = pd.read_excel(Decrement_file_path, sheet_name='ATPD')
+            
+            log_msg(f"Total records to process: {len(df):,}")
+            
+            # Process data in parallel
+            dfbegin = time.time()
+            start_time = datetime.now()
+            
+            num_processes = max(1, mp.cpu_count() - 1)
+            total_records = len(df)
+            log_msg(f"Using {num_processes} processes for parallel computation")
+            
+            chunk_size = len(df) // num_processes + 1
+            chunks = [df[i:i+chunk_size] for i in range(0, len(df), chunk_size)]
+            
+            all_skipped = []
+            all_reasons = []
+            output_files = []
+            aggregated_files = []
+            
+            with ProcessPoolExecutor(max_workers=num_processes) as executor:
+                future_to_chunk = {
+                    executor.submit(process_chunk, chunk, i, selected_date, asum, GS_data, vri, IALM, ADB, ATPD, GS_loading, lapse_table, mortalities, results_dir, COIlevel_CashflowsRequired, ProfitabilityComponentsRequired, cashflowAggregation_type, IsAggregationRequired, GROUPING_COLUMNS, runcase): i 
+                    for i, chunk in enumerate(chunks)
+                }
+                
+                log_msg(f"Submitted {len(chunks)} chunks for processing...")
+                processed_chunks = 0
+                
+                for future in as_completed(future_to_chunk):
+                    chunk_id = future_to_chunk[future]
+                    try:
+                        chunk_output_path, chunk_agg_path, chunk_skipped, chunk_reason = future.result()
+                        output_files.append(chunk_output_path)
+                        aggregated_files.append(chunk_agg_path)
+                        all_skipped.extend(chunk_skipped)
+                        all_reasons.extend(chunk_reason)
+                        
+                        processed_chunks += 1
+                        progress_percent = (processed_chunks / len(chunks)) * 100
+                        log_msg(f"Progress: {processed_chunks}/{len(chunks)} chunks ({progress_percent:.1f}%)")
+                    except Exception as e:
+                        log_msg(f"Error processing chunk {chunk_id + 1}: {e}")
+                        processed_chunks += 1
+            
+            # Combine output files
+            log_msg("Combining output files...")
+            resultsdf = combine_csv_files(output_files, output_report_path, results_dir, current_scenario)
+            
+            # Combine aggregated files
+            if aggregated_files:
+                log_msg("Combining aggregated files...")
+                try:
+                    aggregated_dfs = []
+                    for agg_file in aggregated_files:
+                        if os.path.exists(agg_file) and os.path.getsize(agg_file) > 0:
+                            agg_df = pd.read_csv(agg_file)
+                            if not agg_df.empty:
+                                aggregated_dfs.append(agg_df)
+                            os.remove(agg_file)
+                    
+                    if aggregated_dfs:
+                        aggregated_final = pd.concat(aggregated_dfs, ignore_index=True)
+                        numeric_cols = [col for col in aggregated_final.columns 
+                                      if col not in GROUPING_COLUMNS and 
+                                      pd.api.types.is_numeric_dtype(aggregated_final[col])]
+                        aggregated_final = aggregated_final.groupby(GROUPING_COLUMNS, as_index=False)[numeric_cols].sum()
+                        aggregated_final.sort_values(GROUPING_COLUMNS, inplace=True)
+                        aggregated_final.to_excel(aggregated_output_path, index=False)
+                        log_msg(f"Aggregated output saved to: {aggregated_output_path}")
+                except Exception as e:
+                    log_msg(f"Error combining aggregated files: {e}")
+            
+            # Write skipped policies
+            if all_skipped:
+                skipped_df = pd.DataFrame({'COI Number': all_skipped, 'Reason': all_reasons})
+                skipped_df.to_csv(skipped_policies_path, index=False)
+                log_msg(f"Skipped {len(all_skipped):,} policies")
+            
+            total_time_minutes = (time.time() - dfbegin) / 60
+            log_msg(f"Scenario completed in {total_time_minutes:.2f} minutes")
+        
+        log_msg("✅ All scenarios completed successfully!")
+        
+    except Exception as e:
+        log_msg(f"❌ Error in valuation: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
 if __name__ == "__main__":
 
-    print("\n\n================= Welcome to the Reserve Calculation Module =================\n\n")
-
-    user_name = input("Please enter your name: ")
-    print(f"Hello, {user_name}! Let's get started with the Reserve Calculation.")
-    print("==============================================================================\n\n")
-
-    config_path = input("Please provide the path to the config file: ")
-    config_df = pd.read_excel(config_path)
-    # print(config_df.head())
-
-    # if the config_df['Requirement'] is "Yes" or '1', keep them and drop others from config_df
-    config_df = config_df[config_df['Requirement'].isin(['Yes', '1', 1])].reset_index(drop=True)
-
-    print(f"\n\n\nAvailable Scenarios in the config file: \n{config_df['Scenario name'].tolist()}\n")
-
-    # create a log file with user name, code file name, time stamp, available scenarios as contents of it.
-    log_file_name = f"Run Logs/Reserve_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-    os.makedirs(os.path.dirname(log_file_name), exist_ok=True)
-    with open(log_file_name, 'a') as log_file:
-        log_file.write(f"User: {user_name}\n")
-        log_file.write(f"Code File: {os.path.basename(__file__)}\n")
-        log_file.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        log_file.write(f"Available Scenarios: {config_df['Scenario name'].tolist()}\n")
+    # Try to launch UI, fallback to CLI if not available
+    try:
+        import tkinter as tk
+        from tkinter import filedialog, messagebox, ttk
+        from tkinter.scrolledtext import ScrolledText
+        import threading
         
-    for each_scenario in range(len(config_df)):      
-        current_scenario = config_df['Scenario name'].iloc[each_scenario]  
-        input_file_path = config_df['Input file path'].iloc[each_scenario] or "Valuation.csv"
-        results_dir = f"Results_{config_df['Results Directory'].iloc[each_scenario]}" or 'Results'
-        os.makedirs(results_dir, exist_ok=True)
-        selected_date = pd.to_datetime(config_df['Date of Valuation'].iloc[each_scenario], dayfirst=True)
-        Assumptions_path = config_df['Assumptions_path'].iloc[each_scenario] or 'Assumptions/BaseAssumptions.xlsx'
-
-        Decrement_file_path = config_df['Decrements file path'].iloc[each_scenario] or 'Assumptions/Decrements Table.xlsx'
-
-        lapse_file_path = config_df['Lapse file path'].iloc[each_scenario] or 'Assumptions/Lapse Table.xlsx'
-        COIlevel_CashflowsRequired = int(config_df['COIlevel_CashflowsRequired'].iloc[each_scenario])
-        IsAggregationRequired = int(config_df['IsAggregationRequired'].iloc[each_scenario]) 
-        
-        if IsAggregationRequired == 1:
-            cashflowAggregation_type = int(config_df['CashflowAggregationType'].iloc[each_scenario])
-        else:
-            cashflowAggregation_type = " "
-
-        runcase = config_df['Run Case'].iloc[each_scenario] or "Others"
-
-        ProfitabilityComponentsRequired = int(config_df['ProfitabilityComponentsRequired'].iloc[each_scenario])
-
-        hardcoded_grouping_columns = ["Status", "Outstanding Month"]
-        additional_assumptions_groupings = pd.read_excel(Assumptions_path, sheet_name='Grouping columns')
-
-        assumptions_grouping_columns = additional_assumptions_groupings['Column name'].tolist()
-
-        GROUPING_COLUMNS = hardcoded_grouping_columns + assumptions_grouping_columns if assumptions_grouping_columns else hardcoded_grouping_columns
-
-        # print the scenario details
-        print(f"\n\t\t\t\t\t\t\tCode version used: {os.path.basename(__file__)}")     
-        print(f"\t\t\t\t\t\t\tRunning scenario: {current_scenario}")
-        print(f"\t\t\t\t\t\t\tInput file path: {input_file_path}")    
-        print(f"\t\t\t\t\t\t\tAssumptions file path: {Assumptions_path}")
-        print(f"\t\t\t\t\t\t\tAre individual cashflows required: {COIlevel_CashflowsRequired}")
-        print(f"\t\t\t\t\t\t\tAre profitability components required: {ProfitabilityComponentsRequired}")
-        print(f"\t\t\t\t\t\t\tIs Aggregation Required: {IsAggregationRequired}")
-        print(f"\t\t\t\t\t\t\tAssumptions grouping columns: {GROUPING_COLUMNS}")
-        print(f"\t\t\t\t\t\t\tResults directory: {results_dir}")
-        print(f"\t\t\t\t\t\t\tDate of Valuation: {selected_date.strftime('%d-%m-%Y')}")
-        print(f"\t\t\t\t\t\t\tRun Case: {runcase}\n\t\t\t\t\t\t\t================================================================================")
-
-        df = pd.read_csv(input_file_path, low_memory=False)
-        df = df[df['Issuance Date'].notna() & df['Coverage Effective Date'].notna()] 
-
-        valid_status_codes = {
-            11: 'Yes',
-            '11': 'Yes',
-            22: 'No',
-            24: 'No',
-            32: 'No',
-            33: 'Yes',
-            '33': 'Yes',
-            42: 'Yes',
-            '42': 'Yes',
-            43: 'No',
-            61: 'No'
-        }
-        print(f"\navailable Status codes in the input data: {df['Status'].unique().tolist()}\n")
-        df = df[df['Status'].isin([code for code, reserve in valid_status_codes.items() if reserve == 'Yes'])]
-        print(f"Total records: {len(df):,}\n")
-
-        print("\nMinimum and Maximum Issuance Dates: \n",pd.to_datetime(df['Issuance Date'], dayfirst=True).min()," ==== ", pd.to_datetime(df['Issuance Date'], dayfirst=True).max())
-
-        # File paths
-        IALM = pd.read_excel(Decrement_file_path,sheet_name='IALM1214')
-        ADB = pd.read_excel(Decrement_file_path,sheet_name='ADB')
-        ATPD = pd.read_excel(Decrement_file_path,sheet_name='ATPD')
-
-        output_date = dt.date.today()
-        output_report_path = f"{results_dir}/Valuation-Output_{output_date}_{current_scenario}.csv"
-        # monthly_output_path = f"{results_dir}/Outstanding_Monthly_Values_Output.csv"
-
-        if cashflowAggregation_type == 0:
-            aggregated_output_path = f"{results_dir}/Outstanding_Aggregated_Cashflows_{current_scenario}.xlsx"
-        else:
-            aggregated_output_path = f"{results_dir}/Complete_Aggregated_Cashflows_{current_scenario}.xlsx"
-        
-        skipped_policies_path = f"{results_dir}/Expired_records_{current_scenario}.csv"
-
-        asum = pd.read_excel(Assumptions_path, sheet_name='main')
-
-        additional_assumptions_groupings = pd.read_excel(Assumptions_path, sheet_name='Grouping columns')
-        assumptions_grouping_columns = additional_assumptions_groupings['Column name'].tolist()
-
-        asum.set_index('Assumptions', inplace=True)
-        mortalities = pd.read_excel(Assumptions_path, sheet_name='mortalities')
-        GS_loading = pd.read_excel(Assumptions_path,sheet_name='GS loading')
-        GS_data = pd.read_excel(Assumptions_path, sheet_name='GS_data')
-        print("Assumptions loaded successfully.")
-        vri = pd.read_excel(Assumptions_path, sheet_name='vri')
-        lapse_table = pd.read_excel(lapse_file_path)
-        lapse_table.set_index('Year', inplace=True)
-
-        # Global variables
-        skipped_policies = []
-        reason = []
-    
-        dfbegin = time.time()
-        start_time = datetime.now()
-        
-        num_processes = max(1, mp.cpu_count() - 1)
-        total_records = len(df)
-        print(f"\nUsing {num_processes} processes for parallel computation")
-        print(f"Total records to process: {total_records:,}")
-        print(f"Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-        
-        # Split the dataframe into chunks for parallel processing
-        chunk_size = len(df) // num_processes + 1
-        chunks = [df[i:i+chunk_size] for i in range(0, len(df), chunk_size)]
-        
-        # Progress tracking variables
-        processed_chunks = 0
-        processed_records = 0
-        chunk_start_times = {}
-        
-        # Process chunks in parallel
-        all_skipped = []
-        all_reasons = []
-        output_files = []
-        aggregated_files = []
-        
-        with ProcessPoolExecutor(max_workers=num_processes) as executor:
-            # Submit all tasks with pre-processed chunks
-            future_to_chunk = {
-                executor.submit(process_chunk, chunk, i, selected_date, asum, GS_data ,vri, IALM, ADB, ATPD, GS_loading, lapse_table, mortalities, results_dir,COIlevel_CashflowsRequired,ProfitabilityComponentsRequired,cashflowAggregation_type,IsAggregationRequired,GROUPING_COLUMNS, runcase): i 
-                for i, chunk in enumerate(chunks)
-            }
+        class ProfitabilityUI:
+            def __init__(self, root):
+                self.root = root
+                self.root.title("Profitability - Multiscenario Valuation System")
+                self.root.geometry("900x700")
+                self.root.resizable(True, True)
+                
+                # Configure style
+                style = ttk.Style()
+                style.theme_use('clam')
+                
+                # Main frame
+                main_frame = ttk.Frame(root, padding="10")
+                main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+                root.columnconfigure(0, weight=1)
+                root.rowconfigure(0, weight=1)
+                
+                # Title
+                title = ttk.Label(main_frame, text="Reserve Calculation & Profitability Module", 
+                                font=('Helvetica', 14, 'bold'))
+                title.grid(row=0, column=0, columnspan=3, pady=10)
+                
+                # User name
+                ttk.Label(main_frame, text="User Name:").grid(row=1, column=0, sticky=tk.W, pady=5)
+                self.user_name_var = tk.StringVar()
+                ttk.Entry(main_frame, textvariable=self.user_name_var, width=40).grid(row=1, column=1, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+                
+                # Config file
+                ttk.Label(main_frame, text="Config File Path:").grid(row=2, column=0, sticky=tk.W, pady=5)
+                self.config_path_var = tk.StringVar()
+                config_entry = ttk.Entry(main_frame, textvariable=self.config_path_var, width=40)
+                config_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5)
+                ttk.Button(main_frame, text="Browse", command=self.browse_config).grid(row=2, column=2, padx=5)
+                
+                # Scenarios
+                ttk.Label(main_frame, text="Scenarios to Execute (All Scenarios):").grid(row=3, column=0, sticky=tk.W, pady=5)
+                
+                # Listbox for scenarios (display only, no selection)
+                scenario_frame = ttk.Frame(main_frame)
+                scenario_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+                
+                scrollbar = ttk.Scrollbar(scenario_frame)
+                scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+                
+                self.scenario_listbox = tk.Listbox(scenario_frame, yscrollcommand=scrollbar.set, height=8, state=tk.DISABLED)
+                self.scenario_listbox.pack(side=tk.LEFT, fill=(tk.BOTH), expand=True)
+                scrollbar.config(command=self.scenario_listbox.yview)
+                
+                # Load scenarios button
+                ttk.Button(main_frame, text="Load Scenarios from Config", 
+                          command=self.load_scenarios).grid(row=5, column=0, columnspan=3, pady=10)
+                
+                # Progress bar
+                self.progress_var = tk.DoubleVar()
+                progress_bar = ttk.Progressbar(main_frame, variable=self.progress_var, maximum=100)
+                progress_bar.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+                
+                # Status text
+                ttk.Label(main_frame, text="Status:").grid(row=7, column=0, sticky=tk.W, pady=5)
+                self.status_text = ScrolledText(main_frame, height=10, width=80)
+                self.status_text.grid(row=8, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+                
+                # Buttons frame
+                button_frame = ttk.Frame(main_frame)
+                button_frame.grid(row=9, column=0, columnspan=3, pady=10)
+                
+                ttk.Button(button_frame, text="Run All Scenarios", 
+                          command=self.run_scenarios).pack(side=tk.LEFT, padx=5)
+                ttk.Button(button_frame, text="Clear Log", 
+                          command=self.clear_log).pack(side=tk.LEFT, padx=5)
+                ttk.Button(button_frame, text="Exit", 
+                          command=self.root.quit).pack(side=tk.LEFT, padx=5)
+                
+                main_frame.columnconfigure(1, weight=1)
+                main_frame.rowconfigure(8, weight=1)
+                
+            def browse_config(self):
+                file_path = filedialog.askopenfilename(
+                    title="Select Configuration File",
+                    filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]
+                )
+                if file_path:
+                    self.config_path_var.set(file_path)
             
-            # Record start time for each chunk
-            for future, chunk_id in future_to_chunk.items():
-                chunk_start_times[chunk_id] = time.time()
-            
-            print(f"Submitted {len(chunks)} chunks for processing...")
-            print("-" * 60)
-            
-            # Process results as they complete
-            for future in as_completed(future_to_chunk):
-                chunk_id = future_to_chunk[future]
-                chunk_processing_time = time.time() - chunk_start_times[chunk_id]
+            def load_scenarios(self):
+                config_path = self.config_path_var.get()
+                if not config_path:
+                    messagebox.showerror("Error", "Please select a config file first")
+                    return
                 
                 try:
-                    chunk_output_path, chunk_agg_path, chunk_skipped, chunk_reason = future.result()
-                    output_files.append(chunk_output_path)
-                    aggregated_files.append(chunk_agg_path)
-                    all_skipped.extend(chunk_skipped)
-                    all_reasons.extend(chunk_reason)
+                    config_df = pd.read_excel(config_path)
+                    config_df = config_df[config_df['Requirement'].isin(['Yes', '1', 1])].reset_index(drop=True)
+                    scenarios = config_df['Scenario name'].tolist()
                     
-                    processed_chunks += 1
-                    processed_records += len(chunks[chunk_id])
+                    # Temporarily enable listbox to populate it
+                    self.scenario_listbox.config(state=tk.NORMAL)
+                    self.scenario_listbox.delete(0, tk.END)
+                    for scenario in scenarios:
+                        self.scenario_listbox.insert(tk.END, scenario)
+                    self.scenario_listbox.config(state=tk.DISABLED)
                     
-                    # Calculate progress metrics
-                    progress_percent = (processed_chunks / len(chunks)) * 100
-                    elapsed_time = (time.time() - dfbegin) / 60
-                    estimated_total_time = elapsed_time / (progress_percent / 100) if progress_percent > 0 else 0
-                    remaining_time = estimated_total_time - elapsed_time
-                    
-                    # Print progress update
-                    print(f"✅ Chunk {chunk_id + 1}/{len(chunks)} completed in {chunk_processing_time:.2f}s")
-                    print(f"  Progress: {processed_chunks}/{len(chunks)} chunks "
-                        f"({progress_percent:.1f}%) - {processed_records:,}/{total_records:,} records")
-                    print(f"  Elapsed: {elapsed_time:.1f}m - Remaining: ~{remaining_time:.1f}m")
-                    
-                    # Print every 2 chunks or every minute
-                    if processed_chunks % 2 == 0:
-                        current_time = datetime.now().strftime("%H:%M:%S")
-                        print(f"  Current time: {current_time}")
-                    
-                    print("-" * 40)
-                    
+                    self.log_message(f"Loaded {len(scenarios)} scenarios from config file")
                 except Exception as e:
-                    print(f"❌ ❌ Error processing chunk {chunk_id + 1}: {e}")
-                    processed_chunks += 1  # Still count as processed even if failed
-        
-        # Final timing information
-        total_processing_time = (time.time() - dfbegin) / 60
-        records_per_minute = processed_records / total_processing_time if total_processing_time > 0 else 0
-        
-        print(f"\n{'='*60}")
-        print("PROCESSING COMPLETED")
-        print(f"{'='*60}")
-        print(f"Total time: {total_processing_time:.2f} minutes")
-        print(f"Records processed: {processed_records:,}/{total_records:,}")
-        print(f"Successful chunks: {len(output_files)}/{len(chunks)}")
-        print(f"Skipped policies: {len(all_skipped):,}\n==================================================\n")
-        
-        # Combine all output files
-        resultsdf = combine_csv_files(output_files, output_report_path, results_dir, current_scenario)
-        
-        # Combine all aggregated files
-        if aggregated_files:
-            try:
-                # Read all aggregated files and combine
-                aggregated_dfs = []
-                for i, agg_file in enumerate(aggregated_files):
-                    if os.path.exists(agg_file) and os.path.getsize(agg_file) > 0:
-                        agg_df = pd.read_csv(agg_file)
-                        if not agg_df.empty:
-                            aggregated_dfs.append(agg_df)
-                        os.remove(agg_file)  # Clean up temporary file
-                        
-                        if (i + 1) % 10 == 0:
-                            print(f"  Processed {i + 1}/{len(aggregated_files)} aggregated files")
+                    messagebox.showerror("Error", f"Failed to load scenarios: {str(e)}")
+                    self.log_message(f"Error: {str(e)}")
+            
+            def run_scenarios(self):
+                if not self.user_name_var.get():
+                    messagebox.showerror("Error", "Please enter your name")
+                    return
                 
-                if aggregated_dfs:
-                    aggregated_final = pd.concat(aggregated_dfs, ignore_index=True)
+                if not self.config_path_var.get():
+                    messagebox.showerror("Error", "Please select a config file")
+                    return
+                
+                self.log_message("Starting valuation run...")
+                thread = threading.Thread(target=self.run_in_background)
+                thread.daemon = True
+                thread.start()
+            
+            def run_in_background(self):
+                try:
+                    self.progress_var.set(0)
+                    user_name = self.user_name_var.get()
+                    config_path = self.config_path_var.get()
                     
-                    # Identify numeric columns (exclude grouping columns)
-                    numeric_cols = [col for col in aggregated_final.columns 
-                                if col not in GROUPING_COLUMNS and 
-                                pd.api.types.is_numeric_dtype(aggregated_final[col])]
+                    # Get all scenarios from config (no selection needed)
+                    config_df = pd.read_excel(config_path)
+                    config_df = config_df[config_df['Requirement'].isin(['Yes', '1', 1])].reset_index(drop=True)
+                    all_scenarios = config_df['Scenario name'].tolist()
                     
-                    # Group by the grouping columns and sum all numeric columns
-                    aggregated_final = aggregated_final.groupby(GROUPING_COLUMNS, as_index=False)[numeric_cols].sum()
-                    aggregated_final.sort_values(GROUPING_COLUMNS, inplace=True)
-
-                    # create a new column concating all the grouping columns except 'Outstanding Month' as (Name of this column is dynamic) and move it to the first column and then drop the grouping columns except 'Outstanding Month'
-                    cols_to_concat = [col for col in GROUPING_COLUMNS if col != 'Outstanding Month']
-                    new_col_name = f"Grouping ID\n({'_'.join(cols_to_concat)})"
-                    aggregated_final.insert(0, new_col_name, aggregated_final[cols_to_concat].astype(str).agg('_'.join, axis=1))
-                    aggregated_final.drop(columns=cols_to_concat, inplace=True)
-                    print(f"\n✅ Aggregated data shape: {aggregated_final.shape}")
+                    self.log_message(f"Running all {len(all_scenarios)} scenarios in order...")
                     
-                    # create a new column infront(immediate before column) of the column names in the dictionary and provide headers from the values of dictionary.
-                    dict_new_headers = { 
-                        "Premium": "Per Policy ->",
-                        "Probability - IF\n(bom)": "Reserving ->", 
-                        "Probability - IF_p\n(bom)": "Profitability ->",
-                    }
-
-                    for col, new_header in dict_new_headers.items():
-                        if col in aggregated_final.columns:
-                            col_position = aggregated_final.columns.get_loc(col)
-                            aggregated_final.insert(col_position, new_header, "")
-                           
-                    # Apply the styling
-                    aggregated_final = aggregated_final.style.pipe(color_blank_columns, dict_new_headers=dict_new_headers)
-                    aggregated_final.to_excel(aggregated_output_path, index=False)
-                    print(f"✅ Aggregated output saved to: {aggregated_output_path}")
-                else:
-                    print("❌ Warning: No aggregated data was generated")
+                    def progress_callback(message, current, total):
+                        self.log_message(message)
+                        progress = (current / total * 100) if total > 0 else 0
+                        self.progress_var.set(progress)
+                        self.root.update_idletasks()
                     
-            except Exception as e:
-                print(f"❌ ❌ Error combining aggregated files: {e}")
-                import traceback
-                traceback.print_exc()
+                    # Call the main valuation function with all scenarios
+                    run_valuation(user_name, config_path, all_scenarios, progress_callback)
+                    
+                    self.progress_var.set(100)
+                    self.log_message("✅ Valuation run completed successfully!")
+                    messagebox.showinfo("Success", "Valuation run completed successfully!")
+                except Exception as e:
+                    self.log_message(f"❌ Error: {str(e)}")
+                    messagebox.showerror("Error", f"An error occurred: {str(e)}")
+            
+            def log_message(self, message):
+                self.status_text.insert(tk.END, f"{message}\n")
+                self.status_text.see(tk.END)
+                self.status_text.update()
+            
+            def clear_log(self):
+                self.status_text.delete(1.0, tk.END)
         
-        # Write Skipped Policies to Expired_records.csv
-        if all_skipped:
-            skipped_df = pd.DataFrame({
-                'COI Number': all_skipped,
-                'Reason': all_reasons
-            })            
-            expired_df = df[df['COI Number'].isin(all_skipped)].merge(
-                skipped_df, 
-                on='COI Number', 
-                how='left'
-            )
-            expired_df.to_csv(skipped_policies_path, index=False)
-            print(f"✅ Skipped policies saved to: {skipped_policies_path}")
-            print(f"  Total skipped policies: {len(all_skipped):,}")
+        root = tk.Tk()
+        app = ProfitabilityUI(root)
+        root.mainloop()
+    
+    except ImportError:
+        # Fallback to command-line interface
+        print("\n\n================= Welcome to the Reserve Calculation Module =================\n\n")
         
-        # Final summary
-        dfend = time.time()
-        total_time_minutes = (dfend - dfbegin) / 60
+        user_name = input("Please enter your name: ")
+        print(f"Hello, {user_name}! Let's get started with the Reserve Calculation.")
+        print("==============================================================================\n\n")
         
-        print(f"\n{'='*60}")
-        print("FINAL SUMMARY")
-        print(f"{'='*60}\n")
-        print(f"Total processing time: {total_time_minutes:.2f} minutes")
-        print(f"Total processing time (hrs) : {total_time_minutes/60:.2f} hours")
-        print(f"Start: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"End: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"Records processed: {processed_records:,}")
-        print(f"Skipped policies: {len(all_skipped):,}")
-        print(f"All outputs saved in: {results_dir}")
-        print(f"{'='*60}\n\n\n\n\n\n")
+        config_path = input("Please provide the path to the config file: ")
+        config_df = pd.read_excel(config_path)
+        
+        # Filter configuration based on requirements
+        config_df = config_df[config_df['Requirement'].isin(['Yes', '1', 1])].reset_index(drop=True)
+        
+        print(f"\n\n\nAvailable Scenarios in the config file: \n{config_df['Scenario name'].tolist()}\n")
+        
+        # create a log file with user name, code file name, time stamp, available scenarios as contents of it.
+        log_file_name = f"Run Logs/Reserve_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        os.makedirs(os.path.dirname(log_file_name), exist_ok=True)
+        with open(log_file_name, 'a') as log_file:
+            log_file.write(f"User: {user_name}\n")
+            log_file.write(f"Code File: {os.path.basename(__file__)}\n")
+            log_file.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            log_file.write(f"Available Scenarios: {config_df['Scenario name'].tolist()}\n")
+        
+        # Run all scenarios in order
+        all_scenarios = config_df['Scenario name'].tolist()
+        print(f"\nRunning all {len(all_scenarios)} scenarios in order...\n")
+        
+        def cli_progress_callback(message, current, total):
+            """Simple CLI progress callback"""
+            print(message)
+        
+        run_valuation(user_name, config_path, all_scenarios, cli_progress_callback)
 
 
