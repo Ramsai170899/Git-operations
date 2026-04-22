@@ -2050,6 +2050,7 @@ def run_valuation(user_name, config_path, selected_scenarios, progress_callback=
         traceback.print_exc()
 
 if __name__ == "__main__":
+    mp.freeze_support()
 
     # Try to launch UI, fallback to CLI if not available
     try:
@@ -2382,7 +2383,7 @@ if __name__ == "__main__":
                 
             def log_header(self):
                 self.status_text.insert(tk.END, "╔══════════════════════════════════════════════════════╗\n", "info")
-                self.status_text.insert(tk.END, "║       VALUATION & PROFITABILITY ENGINE v2.0          ║\n", "info")
+                self.status_text.insert(tk.END, "║       VALUATION & PROFITABILITY ENGINE               ║\n", "info")
                 self.status_text.insert(tk.END, "╚══════════════════════════════════════════════════════╝\n", "info")
                 self.status_text.insert(tk.END, f"SYSTEM READY. Waiting for configuration...\n\n")
 
