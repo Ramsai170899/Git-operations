@@ -1901,7 +1901,7 @@ def run_valuation(user_name, config_path, selected_scenarios, progress_callback=
         
         total_scenarios = len(config_df)
         for scenario_idx, each_scenario in enumerate(range(total_scenarios)):
-            log_msg(f"Processing scenario {scenario_idx + 1}/{total_scenarios}...")
+            log_msg(f"\n\n\n\nProcessing scenario {scenario_idx + 1}/{total_scenarios}...")
             
             current_scenario = config_df['Scenario name'].iloc[each_scenario]
             input_file_path = config_df['Input file path'].iloc[each_scenario] or "Valuation.csv"
@@ -1928,8 +1928,31 @@ def run_valuation(user_name, config_path, selected_scenarios, progress_callback=
             assumptions_grouping_columns = additional_assumptions_groupings['Column name'].tolist()
             GROUPING_COLUMNS = hardcoded_grouping_columns + assumptions_grouping_columns if assumptions_grouping_columns else hardcoded_grouping_columns
             
+            print(f"\n\t\t\t\t\t\t\tCode version used: {os.path.basename(__file__)}")     
+            print(f"\t\t\t\t\t\t\tRunning scenario: {current_scenario}")
+            print(f"\t\t\t\t\t\t\tInput file path: {input_file_path}")    
+            print(f"\t\t\t\t\t\t\tAssumptions file path: {Assumptions_path}")
+            print(f"\t\t\t\t\t\t\tAre individual cashflows required: {COIlevel_CashflowsRequired}")
+            print(f"\t\t\t\t\t\t\tAre profitability components required: {ProfitabilityComponentsRequired}")
+            print(f"\t\t\t\t\t\t\tIs Aggregation Required: {IsAggregationRequired}")
+            print(f"\t\t\t\t\t\t\tAssumptions grouping columns: {GROUPING_COLUMNS}")
+            print(f"\t\t\t\t\t\t\tResults directory: {results_dir}")
+            print(f"\t\t\t\t\t\t\tDate of Valuation: {selected_date.strftime('%d-%m-%Y')}")
+            print(f"\t\t\t\t\t\t\tRun Case: {runcase}\n\t\t\t\t\t\t\t================================================================================")
+
+
             log_msg(f"Loading data for scenario: {current_scenario}")
-            
+            log_msg(f"\t\t\t\tInput file path: {input_file_path}")    
+            log_msg(f"\t\t\t\tAssumptions file path: {Assumptions_path}")
+            log_msg(f"\t\t\t\tAre individual cashflows required: {COIlevel_CashflowsRequired}")
+            log_msg(f"\t\t\t\tAre profitability components required: {ProfitabilityComponentsRequired}")
+            log_msg(f"\t\t\t\tIs Aggregation Required: {IsAggregationRequired}")
+            log_msg(f"\t\t\t\tAssumptions grouping columns: {GROUPING_COLUMNS}")
+            log_msg(f"\t\t\t\tResults directory: {results_dir}")
+            log_msg(f"\t\t\t\tDate of Valuation: {selected_date.strftime('%d-%m-%Y')}")
+            log_msg(f"\t\t\t\tRun Case: {runcase}\n\t\t\t\t\t\t\t================================================================================")
+
+
             df = pd.read_csv(input_file_path, low_memory=False)
             df = df[df['Issuance Date'].notna() & df['Coverage Effective Date'].notna()]
             
@@ -2475,6 +2498,5 @@ if __name__ == "__main__":
             print(message)
         
         run_valuation(user_name, config_path, all_scenarios, cli_progress_callback)
-
 
 
